@@ -33,8 +33,10 @@ int main(int argc, char* argv[])
       state.set(j,j%2==1?"Up":"Dn");
     }
   auto psi = MPS(state);
-  DMTDensityMatrix rho = projector(psi);
-  rho.presRange(1);
+  DMTDensityMatrix dmt;
+  MPO & rho = dmt.rho();
+  rho = projector(psi);
+  dmt.presRange(1);
   PrintData(siteInds<MPO>(rho,1));
 
   //Create a std::vector (dynamically sizeable array)
@@ -82,7 +84,7 @@ int main(int argc, char* argv[])
   //PrintData(psi);
 
   //Time evolve, overwriting psi when done
-  gateTEvol(dmtgates,ttotal,tstep,rho,{"Cutoff",cutoff,
+  gateTEvol(dmtgates,ttotal,tstep,dmt,{"Cutoff",cutoff,
 				       "Verbose",true,
 				       "MaxDim", maxDim,
 				       "UseSVD", true,

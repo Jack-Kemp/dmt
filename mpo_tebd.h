@@ -42,7 +42,7 @@ void
 gateTEvol(Iterable const& gatelist, 
           Real ttotal, 
           Real tstep, 
-          DMTDensityMatrix & psi, 
+          DMTDensityMatrix & dmt, 
           Observer& obs,
           Args args)
     {
@@ -53,9 +53,9 @@ gateTEvol(Iterable const& gatelist,
         {
         Error("Timestep not commensurate with total time");
         }
-    
+    MPO & psi = dmt.rho();
     int siteDim = dim(siteIndex(psi, 1));
-    if(MaxDim < pow(siteDim*siteDim, psi.presRange()))
+    if(MaxDim < pow(siteDim*siteDim, dmt.presRange()))
        printfln("Warning: MaxDim < Dimension of preserved range in DMT.");
     
     if(verbose) 
@@ -92,19 +92,19 @@ gateTEvol(Iterable const& gatelist,
                 //before applying current gate
                 if(ni1 >= i2)
                     {
-                    psi.svdBond(i1,AA,Fromleft,args);
+                    dmt.svdBond(i1,AA,Fromleft,args);
                     psi.position(ni1); //does no work if position already ni1
                     }
                 else
                     {
-                    psi.svdBond(i1,AA,Fromright,args);
+                    dmt.svdBond(i1,AA,Fromright,args);
                     psi.position(ni2); //does no work if position already ni2
                     }
                 }
             else
                 {
                 //No next gate to analyze, just restore MPO form
-                psi.svdBond(i1,AA,Fromright,args);
+                dmt.svdBond(i1,AA,Fromright,args);
                 }
             }
 
@@ -127,11 +127,11 @@ void
 gateTEvol(Iterable const& gatelist, 
           Real ttotal, 
           Real tstep, 
-          DMTDensityMatrix & psi, 
+          DMTDensityMatrix & dmt, 
           Args const& args)
     {
     TEvolObserver obs(args);
-    return gateTEvol(gatelist,ttotal,tstep,psi,obs,args);
+    return gateTEvol(gatelist,ttotal,tstep,dmt,obs,args);
     }
 
 } //namespace itensor

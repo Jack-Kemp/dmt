@@ -57,12 +57,13 @@ namespace itensor{
     return id;
   }
 
-  class DMTDensityMatrix : public MPO
+  class DMTDensityMatrix
   
   {
     int presRange_ = 1;
     bool vectorized = false;
     std::vector<IndexSet> siteIndsStore_{};
+    MPO rho_;
     
     //using MPO::MPS::N_;
     //using MPS::A_;
@@ -72,20 +73,22 @@ namespace itensor{
     ITensor
     get_Aid_prodL(int presL)
     {
-      return traceSubsection(*this, 1, presL);
+      return traceSubsection(rho_, 1, presL);
     }
 
     ITensor
     get_Aid_prodR(int presR)
     {
-      return traceSubsection(*this, presR+1, N_+1);
+      return traceSubsection(rho_, presR+1, length(rho_)+1);
     }
     
   public:
 
-    using MPO::MPO;
-    DMTDensityMatrix (MPO&& mpo) : MPO(mpo){}
-    DMTDensityMatrix (const MPO& mpo): MPO(mpo){}
+    MPO & rho(){
+      if(vectorized)
+	Error("Cannot return MPO when vectorized");
+      return rho_;
+    }
     
    
     std::vector<IndexSet>
@@ -114,15 +117,15 @@ namespace itensor{
       auto presArgs = Args{"Cutoff=",presCutoff};
 	  
       //From MPS svdBond
-      setBond(b);
-      if(dir == Fromleft && b-1 > leftLim())
+      //rho_.setBond(b); ???
+      if(dir == Fromleft && b-1 > rho_.leftLim())
 	{
-	  printfln("b=%d, l_orth_lim_=%d",b,leftLim());
+	  printfln("b=%d, l_orth_lim_=%d",b,rho_.leftLim());
 	  Error("b-1 > l_orth_lim_");
 	}
-      if(dir == Fromright && b+2 < rightLim())
+      if(dir == Fromright && b+2 < rho_.rightLim())
 	{
-	  printfln("b=%d, r_orth_lim_=%d",b,rightLim());
+	  printfln("b=%d, r_orth_lim_=%d",b,rho_.rightLim());
 	  Error("b+2 < r_orth_lim_");
 	}
 
@@ -135,34 +138,34 @@ namespace itensor{
       // Store the original tags for link b so that it can
       // be put back onto the newly introduced link index
 	  
-      auto original_link_tags = tags(linkIndex<MPO>(*this,b));
-      res = svd(AA,A_[b],D,A_[b+1], {"Truncate", false});
+      auto original_link_tags = tags(linkIndex(rho_, b));
+      res = svd(AA,rho_.ref(b),D,rho_.ref(b+1), {"Truncate", false});
       //PrintData(D);
-      auto indDL = commonIndex(A_[b],D);
-      auto indDR = commonIndex(A_[b+1],D);
+      auto indDL = commonIndex(rho_(b),D);
+      auto indDR = commonIndex(rho_(b+1),D);
 
       //Closest left preserved site on b
       int presL = std::max(1,   b - presRange_ + 1);
-      auto basisL = A_[presL];
+      auto basisL = rho_(presL);
 	  
       //Closest right preserved site on b + 1
-      int presR = std::min(N_, b + presRange_);
-      auto basisR = A_[presR];
+      int presR = std::min(length(rho_), b + presRange_);
+      auto basisR = rho_(presR);
 
       int presLenL = b - presL + 1;
       int presLenR = presR - b;
 	  
       for (int i = 1; i < presLenL; i ++)
-	basisL *= A_[presL + i];
+	basisL *= rho_(presL + i);
       for (int i = 1; i < presLenR; i ++)
-	basisR *= A_[presR - i];
+	basisR *= rho_(presR - i);
 
       //Get product of tensors for the identity on all non-preserved sites
       if (presL > 1){
 	basisL *= this->get_Aid_prodL(presL);
 	//PrintData( this->get_Aid_prodL(presL));
 		}
-      if (presR < N_)
+      if (presR < length(rho_))
 	basisR *= this->get_Aid_prodR(presR);
 
       //Get physical indices (i.e. not bond)
@@ -288,8 +291,8 @@ namespace itensor{
 	      //accurate SVD method in the MatrixRef library
 	      ITensor Dv, Av(indDL), Bv(indDR);
 	      res = svd(newAA,Av,Dv,Bv,presArgs);
-	      A_[b] *= Av;
-	      A_[b+1] *= Bv;
+	      rho_.ref(b) *= Av;
+	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
 	      if(args.getBool("DoNormalize",false))
 		{
@@ -297,8 +300,8 @@ namespace itensor{
 		}
 
 	      //Push the singular values into the appropriate site tensor
-	      if(dir == Fromleft) A_[b+1] *= Dv;
-	      else                A_[b]   *= Dv;
+	      if(dir == Fromleft) rho_.ref(b+1) *= Dv;
+	      else                rho_.ref(b)   *= Dv;
 	    }
 	  else
 	    {
@@ -307,12 +310,12 @@ namespace itensor{
 	      //use density matrix approach
 	      ITensor Av(indDL), Bv(indDR);
 	      res = denmatDecomp(newAA,Av,Bv,dir,PH,presArgs);
-	      A_[b] *= Av;
-	      A_[b+1] *= Bv;
+	      rho_.ref(b) *= Av;
+	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
 	      if(args.getBool("DoNormalize",false))
 		{
-		  ITensor& oc = (dir == Fromleft ? A_[b+1] : A_[b]);
+		  ITensor& oc = (dir == Fromleft ? rho_.ref(b+1) : rho_.ref(b));
 		  auto nrm = itensor::norm(oc);
 		  if(nrm > 1E-16) oc *= 1./nrm;
 		}
@@ -323,25 +326,25 @@ namespace itensor{
       else
 	{
 	  //Push the singular values into the appropriate site tensor
-	  if(dir == Fromleft) A_[b+1] *= D;
-	  else                A_[b]   *= D;
+	  if(dir == Fromleft) rho_.ref(b+1) *= D;
+	  else                rho_.ref(b)   *= D;
 	}
 
       // Put the old tags back onto the new index
-      auto lb = commonIndex(A_[b],A_[b+1]);
-      A_[b].setTags(original_link_tags,lb);
-      A_[b+1].setTags(original_link_tags,lb);
+      auto lb = commonIndex(rho_(b),rho_(b+1));
+      rho_.ref(b).setTags(original_link_tags,lb);
+      rho_.ref(b+1).setTags(original_link_tags,lb);
 
 
       if(dir == Fromleft)
 	{
-	  l_orth_lim_ = b;
-	  if(r_orth_lim_ < b+2) r_orth_lim_ = b+2;
+	  rho_.leftLim(b);
+	  if(rho_.rightLim() < b+2) rho_.rightLim(b+2);
 	}
       else //dir == Fromright
 	{
-	  if(l_orth_lim_ > b-1) l_orth_lim_ = b-1;
-	  r_orth_lim_ = b+1;
+	  if(rho_.leftLim() > b-1) rho_.leftLim(b-1);
+	  rho_.rightLim(b+1);
 	}
       return res;
     }
@@ -351,16 +354,16 @@ namespace itensor{
     {
       if(vectorized)
 	Error("Cannot vectorize already vectorized MPO!");
-      siteIndsStore_ = std::vector<IndexSet>(N_);
+      siteIndsStore_ = std::vector<IndexSet>(length(rho_));
       vectorized = true;
-      std::vector<ITensor> Cs (N_);
-      IndexSet cinds (N_);
+      std::vector<ITensor> Cs (length(rho_));
+      IndexSet cinds (length(rho_));
       //Vectorise physical indices
-      for(auto i : range1(N_)){
+      for(auto i : range1(length(rho_))){
 	auto inds = siteInds(*this, i);
 	siteIndsStore_[i-1] = inds;
 	std::tie(Cs[i-1],cinds[i-1]) = combiner(inds);
-	A_[i] *= Cs[i-1];
+	rho_.ref(i) *= Cs[i-1];
       }
       return std::tie(Cs,cinds);
     }
@@ -371,23 +374,23 @@ namespace itensor{
       if(not vectorized)
 	Error("Cannot unvectorize a not vectorized MPO!");
       vectorized = false;
-      for(auto i : range1(N_))
+      for(auto i : range1(length(rho_)))
 	{
 	  ITensor B{siteIndsStore_[i-1]};
 	  int ncols = siteIndsStore_[i-1][0].dim();
 	  int u = 0;
 	  int v = 0;
-	  int nels = A_[i].index(1).dim();
+	  int nels = rho_(i).index(1).dim();
 	  for (int j =0; j < nels; j++)
 	    {
-	      B.set(u,v, eltC(A_[i],j));
+	      B.set(u,v, eltC(rho_(i),j));
 	      v++;
 	      if (v == ncols){
 		v = 0;
 		u++;
 	      }
 	    }
-	  A_[i] = B;
+	  rho_.ref(i) = B;
 	}
     }
 
