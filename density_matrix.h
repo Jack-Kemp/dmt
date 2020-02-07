@@ -6,6 +6,7 @@
 #include <cmath>
 
 namespace itensor{
+
   Index
   reduceDimTop(const Index & ind, const int & reduceDim)
   {
@@ -35,6 +36,28 @@ namespace itensor{
     return Index(ind.dim()-reduceDim, indTags);
   }
 
+  ITensor
+  kron(const ITensor & A , const ITensor & B,
+       const IndexSet & oldInds, const IndexSet & newInds)
+  {
+    //Assumes oldInds in pairs of form (no prime, prime) shared by A and B.
+    //Doesn't kronecker indices not in oldInds so can partial kron as well
+    IndexSet indsz = findInds(oldInds, "0");
+    int len = length(indsz);
+    std::vector<ITensor> Combs (len), pCombs (len);
+    std::vector<Index> vecInds(len), vecpInds(len);
+    auto ret = replaceTags(A, "1", "2")*prime(replaceTags(B,"1", "2"));
+    for (int i = 0; i < len; i++) {
+      std::tie(Combs[i], vecInds[i]) = combiner(indsz[i], prime(indsz[i]));
+      ret *= Combs[i];
+      std::tie(pCombs[i], vecpInds[i]) = combiner(prime(indsz[i],2), prime(indsz[i],3));
+      ret *= pCombs[i];
+    }
+    ret.replaceInds(vecInds, newInds).replaceInds(vecpInds, prime(newInds));
+    ret.replaceTags("3","1").replaceTags("2","1");
+    return ret;
+  }
+
   ITensor traceSubsection(const MPO& A, int start, int end){
     auto trA_n = A(start) * delta(dag(siteInds(A, start)));
     auto L = trA_n;
@@ -46,7 +69,9 @@ namespace itensor{
     return L;
   }
 
-  ITensor getPairedId(IndexSet pairedInds){
+  ITensor
+  getPairedId(IndexSet pairedInds)
+  {
     int order = pairedInds.r();
     if (order % 2 != 0 or order < 2)
       Error("Invalid number of indices to getId.");
@@ -57,38 +82,163 @@ namespace itensor{
     return id;
   }
 
+  BondGate
+  VecMPOBondGate(SiteSet const& sites,
+			ITensor const& unit,
+         int i1, 
+         int i2,
+	 BondGate::Type type,
+         Real tau,
+         ITensor bondH)
+    {
+    if(i1 > i2)
+      std::swap(i1,i2);
+
+    if(!(type == BondGate::tReal || type == BondGate::tImag))
+        {
+        Error("When providing bondH, type must be tReal or tImag");
+        }
+    bondH *= -tau;
+    
+    if(type == BondGate::tReal)
+        {
+        bondH *= Complex_i;
+        }
+    auto term = bondH;
+    bondH.replaceTags("1","2");
+    bondH.replaceTags("0","1");
+    ITensor gate;
+
+    // exp(x) = 1 + x +  x^2/2! + x^3/3! ..
+    // = 1 + x * (1 + x/2 *(1 + x/3 * (...
+    // ~ ((x/3 + 1) * x/2 + 1) * x + 1
+    for(int ord = 100; ord >= 1; --ord)
+        {
+        term /= ord;
+        gate = unit + term;
+        term = gate * bondH;
+        term.replaceTags("2","1");
+        }
+    return BondGate(sites, i1,i2,gate);
+    }
+
   class DMTDensityMatrix
   
   {
     int presRange_ = 1;
-    bool vectorized = false;
+    bool vectorized_ = false;
     std::vector<IndexSet> siteIndsStore_{};
+    SiteSet sites_;
     MPO rho_;
-    
-    //using MPO::MPS::N_;
-    //using MPS::A_;
-    // using MPS::l_orth_lim_;
-    // using MPS::r_orth_lim_;
+    std::vector<ITensor> vecCombs;
+    IndexSet vecInds;
 
     ITensor
     get_Aid_prodL(int presL)
     {
-      return traceSubsection(rho_, 1, presL);
+      if (not vectorized_)
+	{
+	return traceSubsection(rho_, 1, presL);
+	}
+      else
+	{
+	  auto ret = (op(sites_,"Id",1)*vecCombs[0])*rho_(1); 
+	  for(int i=2; i<presL; i++)
+	    {
+	      ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
+	    }
+	  return ret;
+      }	
     }
 
     ITensor
     get_Aid_prodR(int presR)
     {
-      return traceSubsection(rho_, presR+1, length(rho_)+1);
+      int lr = length(rho_);
+       if (not vectorized_)
+	{
+	  return traceSubsection(rho_, presR+1, lr+1);
+	}
+       else
+	 {
+	   auto ret = (op(sites_,"Id",lr)*vecCombs[lr-1])*rho_(lr); 
+	   for(int i= lr-1; i>presR; i--)
+	     {
+	       ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
+	     }
+	   return ret;
+	 }	
     }
+
+    ITensor
+    getId(int siteStart, int siteEnd){
+      ITensor id = op(sites_, "Id", siteStart);
+      if (vectorized_)
+	{
+	id *= vecCombs[siteStart-1];
+	for (int i = siteStart+1; i<siteEnd; i++)
+	  id *= op(sites_, "Id", i)*vecCombs[i-1];
+      }
+      else
+	{
+	  for (int i = siteStart+1; i<siteEnd; i++)
+	    id *= op(sites_, "Id", i);
+	}   
+    return id;
+  }
     
   public:
 
-    MPO & rho(){
-      if(vectorized)
-	Error("Cannot return MPO when vectorized");
+    const SiteSet &
+    sites () const { return sites_;}
+
+    void
+    sites(SiteSet s) { sites_ = s;}
+
+    bool
+    vectorized() const {return vectorized_;}
+
+    MPO &
+    rho(){
       return rho_;
     }
+
+    const std::vector<ITensor> &
+    vecCombiners(){ return vecCombs;}
+
+    const ITensor &
+    vecC(int i) { return vecCombs[i-1];}
+
+    const Index &
+    vecInd(int i) { return vecInds[i-1];}
+
+    BondGate
+    calcGate (ITensor hterm, double tstep, int leftSite)
+    {
+      int b = leftSite;
+      if (vectorized_)
+	{
+	  //hterm = (hterm*dmt.vecC(b))*dmt.vecC(b+1);
+	  auto idterm  = op(sites_,"Id",b)*op(sites_,"Id",b+1);
+	  IndexSet siteInds = idterm.inds();
+	  IndexSet vecInds = IndexSet(vecInd(b), vecInd(b+1));
+	  auto Combs = {vecC(b), vecC(b+1)};
+	  auto hsupterm = kron(idterm, hterm, siteInds, vecInds)
+	    - kron(hterm, idterm, siteInds, vecInds);
+	  return VecMPOBondGate(sites_,
+				   kron(idterm, idterm, siteInds, vecInds),
+				   b,b+1,BondGate::tReal,tstep/2.,hsupterm);
+	}
+      else
+	{
+	  auto gp = BondGate(sites_,b,b+1,BondGate::tReal,tstep/2.,hterm);
+	  auto gm = BondGate(sites_,b,b+1,BondGate::tReal,-tstep/2.,hterm);
+	  return BondGate(sites_,b,b+1,
+			     mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3));
+	}
+    }
+      
+
     
    
     std::vector<IndexSet>
@@ -111,7 +261,7 @@ namespace itensor{
 	  
       auto noise = args.getReal("Noise",0.);
       auto cutoff = args.getReal("Cutoff",MIN_CUT);
-      auto presCutoff = args.getReal("PresCutoff",0.0);
+      auto presCutoff = args.getReal("PresCutoff",1e-15);
       auto usesvd = args.getBool("UseSVD",false);
       int maxDim =  args.getInt("MaxDim", MAX_DIM);
       auto presArgs = Args{"Cutoff=",presCutoff};
@@ -139,8 +289,11 @@ namespace itensor{
       // be put back onto the newly introduced link index
 	  
       auto original_link_tags = tags(linkIndex(rho_, b));
-      res = svd(AA,rho_.ref(b),D,rho_.ref(b+1), {"Truncate", false});
-      //PrintData(D);
+      //PrintData(AA);
+      //PrintData(rho_(b));
+      //PrintData(rho_(b+1));
+      res = svd(AA,rho_.ref(b),D,rho_.ref(b+1), {"Cutoff", 1e-15});
+      PrintData(D.inds());
       auto indDL = commonIndex(rho_(b),D);
       auto indDR = commonIndex(rho_(b+1),D);
 
@@ -186,21 +339,8 @@ namespace itensor{
 	  ITensor dummyT = ITensor(dummyInd);
 	  dummyT.set(1,1.0);
 
-	  auto idL = getPairedId(siteIndsL)*dummyT;
-	  auto idR = getPairedId(siteIndsR)*dummyT;
-	 
-
-	  // int dL = std::sqrt(dim(csiteIndsL));
-	  // int dR = std::sqrt(dim(csiteIndsR));
-
-	  // //Get vectorised identities to QR into first basis vector.
-	  
-	  // ITensor idL{csiteIndsL, Index()};
-	  // ITensor idR{csiteIndsR};
-	  // for (int i = 0; i < dL; i++)
-	  //   idL.set(1+(dL+1)*i, 1.0);
-	  // for (int i = 0; i < dR; i++)
-	  //   idR.set(1+(dR+1)*i, 1.0);
+	  auto idL = getId(presL, b+1)*dummyT;
+	  auto idR = getId(b+1, presR+1)*dummyT;
 
 	  Args qrArgs = Args{"Complete", true};
 
@@ -216,7 +356,7 @@ namespace itensor{
 	  D = QbasisL.conj() * D * QbasisR;
 	  auto connectedComp = (D*setElt(qrLinkL=1).dag())*(D*setElt(qrLinkR=1).dag())/eltC(D,1,1);
 	  D -= connectedComp;
-	  //PrintData(D);
+	  PrintData(D.inds());
 
 	  auto subindL = reduceDimTop(qrLinkL, sdimL);
 	  auto subindR = reduceDimTop(qrLinkR, sdimR);
@@ -232,7 +372,7 @@ namespace itensor{
 		if (abs(el) > 0)
 		  subD.set(i-sdimL,j-sdimR, el);
 	      }
-	   
+	  PrintData(subD.inds());
 
 	  int subMaxDim = maxDim;
 	  subMaxDim -= sdimL + sdimR;
@@ -255,6 +395,7 @@ namespace itensor{
 		  //accurate SVD method in the MatrixRef library
 		  ITensor W(subindL),S,V;
 		  res = svd(subD,W,S,V,args);
+		  PrintData(S.inds());
 		  subD = W*S*V;
 		}
 	      else
@@ -273,12 +414,13 @@ namespace itensor{
 	      {
 	      auto el = eltC(D,i,j);
 	      if (abs(el) > 0)
-		D.set(i,j, eltC(D,i-sdimL,j-sdimR));
+		D.set(i,j, eltC(subD,i-sdimL,j-sdimR));
 	      }
+	  //PrintData(D.inds());
 	  D += connectedComp;
 	  args.add("MaxDim", maxDim);
 	  presArgs.add("MaxDim", maxDim);
-	  //PrintData(D);
+	  
 
 	  //A_[b] *= QbasisL.dag()*D*QbasisR.dag();
 	  //auto newAA = A_[b]*A_[b+1];
@@ -294,6 +436,7 @@ namespace itensor{
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
+	      PrintData(Dv.inds());
 	      if(args.getBool("DoNormalize",false))
 		{
 		  Dv *= 1./itensor::norm(Dv);
@@ -320,8 +463,6 @@ namespace itensor{
 		  if(nrm > 1E-16) oc *= 1./nrm;
 		}
 	    }
-	  //PrintData(A_[b]);
-	  //PrintDat((A_[b+1]));
 	}
       else
 	{
@@ -352,47 +493,83 @@ namespace itensor{
     auto
     vec()
     {
-      if(vectorized)
+      if(vectorized_)
 	Error("Cannot vectorize already vectorized MPO!");
       siteIndsStore_ = std::vector<IndexSet>(length(rho_));
-      vectorized = true;
-      std::vector<ITensor> Cs (length(rho_));
-      IndexSet cinds (length(rho_));
+      vectorized_ = true;
       //Vectorise physical indices
+      vecCombs.resize(length(rho_));
+      vecInds.resize(length(rho_));
       for(auto i : range1(length(rho_))){
-	auto inds = siteInds(*this, i);
+	auto inds = siteInds(rho_, i);
 	siteIndsStore_[i-1] = inds;
-	std::tie(Cs[i-1],cinds[i-1]) = combiner(inds);
-	rho_.ref(i) *= Cs[i-1];
+	std::tie(vecCombs[i-1],vecInds[i-1]) = combiner(inds,
+							{"Tags", "Site, n="+ std::to_string(i)});
+	rho_.ref(i) *= vecCombs[i-1];
       }
-      return std::tie(Cs,cinds);
+      return std::tie(vecCombs,vecInds);
     }
 
     void
     unvec()
     {
-      if(not vectorized)
+      if(not vectorized_)
 	Error("Cannot unvectorize a not vectorized MPO!");
-      vectorized = false;
+      vectorized_ = false;
       for(auto i : range1(length(rho_)))
-	{
-	  ITensor B{siteIndsStore_[i-1]};
-	  int ncols = siteIndsStore_[i-1][0].dim();
-	  int u = 0;
-	  int v = 0;
-	  int nels = rho_(i).index(1).dim();
-	  for (int j =0; j < nels; j++)
-	    {
-	      B.set(u,v, eltC(rho_(i),j));
-	      v++;
-	      if (v == ncols){
-		v = 0;
-		u++;
-	      }
-	    }
-	  rho_.ref(i) = B;
+	{	  
+	  rho_.ref(i) *= vecCombs[i-1];
 	}
     }
+
+
+    /*
+    void
+    unvec()
+    {
+      if(not vectorized_)
+	Error("Cannot unvectorize a not vectorized MPO!");
+      vectorized_ = false;
+      for(auto i : range1(length(rho_)))
+	{
+	  Index vecind = siteIndex(rho_,i);
+	  IndexSet sinds = siteIndsStore_[i-1];
+	  IndexSet linds = linkInds(rho_,i); 
+	  ITensor B{IndexSet(linds, sinds)};
+	  int nrows = sinds[1].dim();
+	  bool twolinks = order(linds) > 1;
+	  for (int l0 = 1; l0 <= linds[0].dim(); l0++){
+	    int u = 1;
+	    int v = 1;
+	    int nels = vecind.dim();
+	    for (int j =1; j <= nels; j++)
+	      {
+		if (twolinks)
+		  {
+		    for (int l1 = 1; l1 <= linds[1].dim(); l1++){
+		      auto el =  eltC(rho_(i),vecind=j, linds[0] = l0, linds[1] = l1);
+		      B.set(l0, l1, u,v, el);
+		    }
+		  }
+		else
+		  {
+		    auto el = eltC(rho_(i),vecind=j, linds[0] = l0);
+		    B.set(l0, u,v, el);
+		  }
+		u++;
+		if (u == nrows+1){
+		  u = 1;
+		  v++;
+		}
+	      }
+	  }
+	  rho_.ref(i) = B;
+	}
+      vecCombs.clear();
+      vecInds.clear();
+      siteIndsStore_.clear();
+    }
+    */
 
     void
     svdBond(int b, 

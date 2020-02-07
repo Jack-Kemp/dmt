@@ -13,7 +13,7 @@ APP=dmt
 
 # 4. Add any headers your program depends on here. The make program
 #    will auto-detect if these headers have changed and recompile your app.
-HEADERS=
+HEADERS=density_matrix.h mpo_tebd.h input_output_utilities.h
 
 # 5. For any additional .cc files making up your project,
 #    add their full filenames here.
@@ -64,6 +64,9 @@ clean:
 
 run:
 	./$(APP)
+
+rund:
+	./$(APP)-g
 
 brun:
 	$(APP)

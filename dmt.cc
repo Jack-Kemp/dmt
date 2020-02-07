@@ -4,7 +4,7 @@
 #include "density_matrix.h"
 #include "mpo_tebd.h"
 #include "itensor/all.h"
-
+#include <itensor/mps/bondgate.h>
 #include<chrono>
 #include<functional>
 
@@ -16,15 +16,16 @@ using std::vector;
 int main(int argc, char* argv[])
 {
   struct Flags;
-  int N = 24; //number of sites
-  Real tstep = 0.02; //time step (smaller is generally more accurate)
-  Real ttotal = 0.1; //total time to evolve
+  int N = 10; //number of sites
+  Real tstep = 0.01; //time step (smaller is generally more accurate)
+  Real ttotal = 1.00; //total time to evolve
   Real cutoff = 1E-8; //truncation error cutoff when restoring MPS form
-  int maxDim = 30;
+  int maxDim = 64;
+  bool vectorized = true;
   //Define a site set object "sites" which lets us
   //easily obtain Site indices defining our Hilbert space
   //and S=1/2 single-site operators
-  auto sites = SpinHalf(N);
+  auto sites = SpinHalf(N, {"ConserveQNs=",false});
 
   //Make initial MPS psi to be in the Neel state
   auto state = InitState(sites);
@@ -37,6 +38,9 @@ int main(int argc, char* argv[])
   MPO & rho = dmt.rho();
   rho = projector(psi);
   dmt.presRange(1);
+  dmt.sites(sites);
+  if (vectorized)
+    dmt.vec();
   PrintData(siteInds<MPO>(rho,1));
 
   //Create a std::vector (dynamically sizeable array)
@@ -57,11 +61,9 @@ int main(int argc, char* argv[])
       hterm += 0.5*op(sites,"S-",b)*op(sites,"S+",b+1);
       ampo += 0.5, "S-", b, "S+", b+1;
       
-      auto gp = BondGate(sites,b,b+1,BondGate::tReal,tstep/2.,hterm);
-      auto gm = BondGate(sites,b,b+1,BondGate::tReal,-tstep/2.,hterm);
-      auto dmtgate =  mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3);
-      mpsgates.push_back(gp);
-      dmtgates.emplace_back(sites, b, b+1, dmtgate);
+      mpsgates.push_back(BondGate(sites,b,b+1,BondGate::tReal,tstep/2.,hterm));
+      dmtgates.push_back(dmt.calcGate(hterm, tstep, b));
+      //dmtgates.emplace_back(sites, b, b+1, dmtgate);
     }
   auto H = toMPO(ampo);
   //Create the gates exp(-i*tstep/2*hterm) in reverse
@@ -72,11 +74,9 @@ int main(int argc, char* argv[])
       auto hterm = op(sites,"Sz",b)*op(sites,"Sz",b+1);
       hterm += 0.5*op(sites,"S+",b)*op(sites,"S-",b+1);
       hterm += 0.5*op(sites,"S-",b)*op(sites,"S+",b+1);
-      auto gp = BondGate(sites,b,b+1,BondGate::tReal,tstep/2.,hterm);
-      auto gm = BondGate(sites,b,b+1,BondGate::tReal,-tstep/2.,hterm);
-      auto dmtgate =  mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3);
-      mpsgates.push_back(gp);
-      dmtgates.emplace_back(sites, b, b+1, dmtgate);
+      mpsgates.push_back(BondGate(sites,b,b+1,BondGate::tReal,tstep/2.,hterm));
+      dmtgates.push_back(dmt.calcGate(hterm, tstep, b));
+      //dmtgates.emplace_back(sites, b, b+1, dmtgate);
     }
 
   //Save initial state;
@@ -88,17 +88,22 @@ int main(int argc, char* argv[])
 				       "Verbose",true,
 				       "MaxDim", maxDim,
 				       "UseSVD", true,
-				       "DoNormalize", true});
+				       "DoNormalize", false});
   gateTEvol(mpsgates,ttotal,tstep,psi,{"Cutoff=",cutoff,"Verbose=",true});
   
 
   printfln("Maximum MPS bond dimension after time evolution is %d",maxLinkDim(psi));
+  printfln("Maximum MPO bond dimension after time evolution is %d",maxLinkDim(dmt.rho()));
 
   //Print overlap of final state with initial state
   //(Will be complex so using innerC which can return complex);
+  if (vectorized)
+    dmt.unvec();
   auto overlap = innerC(psi,psi0);
   Print(std::norm(overlap));
   Print(traceC(rho,swapPrime(projector(psi0),0,1)));
+  auto initialE = innerC(psi0, H, psi0);
+  Print(initialE);
   auto E = innerC(psi, H, psi);
   Print(E);
   auto Erho = traceC(rho, H);
