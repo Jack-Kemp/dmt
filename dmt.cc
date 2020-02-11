@@ -21,11 +21,8 @@ int main(int argc, char* argv[])
   Real ttotal = 1.00; //total time to evolve
   Real cutoff = 1E-8; //truncation error cutoff when restoring MPS form
   int maxDim = 64;
-  bool vectorized = true;
-  //Define a site set object "sites" which lets us
-  //easily obtain Site indices defining our Hilbert space
-  //and S=1/2 single-site operators
-  auto sites = SpinHalf(N, {"ConserveQNs=",false});
+  bool vectorized = false;
+  auto sites = SpinHalf(N, {"ConserveQNs=",true});
 
   //Make initial MPS psi to be in the Neel state
   auto state = InitState(sites);
@@ -37,7 +34,7 @@ int main(int argc, char* argv[])
   DMTDensityMatrix dmt;
   MPO & rho = dmt.rho();
   rho = projector(psi);
-  dmt.presRange(1);
+  dmt.presRange(3);
   dmt.sites(sites);
   if (vectorized)
     dmt.vec();
@@ -55,20 +52,19 @@ int main(int argc, char* argv[])
   for(int b = 1; b < N; ++b)
     {
       auto hterm = op(sites,"Sz",b)*op(sites,"Sz",b+1);
-      ampo += "Sz", b, "Sz", b+1;
       hterm += 0.5*op(sites,"S+",b)*op(sites,"S-",b+1);
-      ampo += 0.5, "S+", b, "S-", b+1;
       hterm += 0.5*op(sites,"S-",b)*op(sites,"S+",b+1);
-      ampo += 0.5, "S-", b, "S+", b+1;
       
       mpsgates.push_back(BondGate(sites,b,b+1,BondGate::tReal,tstep/2.,hterm));
       dmtgates.push_back(dmt.calcGate(hterm, tstep, b));
-      //dmtgates.emplace_back(sites, b, b+1, dmtgate);
+      
+      //Construct the full Hamiltonian to calculate energy
+      ampo += "Sz", b, "Sz", b+1;
+      ampo += 0.5, "S+", b, "S-", b+1;
+      ampo += 0.5, "S-", b, "S+", b+1;
     }
   auto H = toMPO(ampo);
-  //Create the gates exp(-i*tstep/2*hterm) in reverse
-  //order (to get a second order Trotter breakup which
-  //does a time step of "tstep") and add them to gates
+  
   for(int b = N-1; b >= 1; --b)
     {
       auto hterm = op(sites,"Sz",b)*op(sites,"Sz",b+1);
@@ -81,7 +77,6 @@ int main(int argc, char* argv[])
 
   //Save initial state;
   auto psi0 = psi;
-  //PrintData(psi);
 
   //Time evolve, overwriting psi when done
   gateTEvol(dmtgates,ttotal,tstep,dmt,{"Cutoff",cutoff,
@@ -95,8 +90,6 @@ int main(int argc, char* argv[])
   printfln("Maximum MPS bond dimension after time evolution is %d",maxLinkDim(psi));
   printfln("Maximum MPO bond dimension after time evolution is %d",maxLinkDim(dmt.rho()));
 
-  //Print overlap of final state with initial state
-  //(Will be complex so using innerC which can return complex);
   if (vectorized)
     dmt.unvec();
   auto overlap = innerC(psi,psi0);

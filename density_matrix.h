@@ -293,7 +293,7 @@ namespace itensor{
       //PrintData(rho_(b));
       //PrintData(rho_(b+1));
       res = svd(AA,rho_.ref(b),D,rho_.ref(b+1), {"Cutoff", 1e-15});
-      PrintData(D.inds());
+      //PrintData(D.inds());
       auto indDL = commonIndex(rho_(b),D);
       auto indDR = commonIndex(rho_(b+1),D);
 
@@ -321,13 +321,20 @@ namespace itensor{
       if (presR < length(rho_))
 	basisR *= this->get_Aid_prodR(presR);
 
+      #ifdef DEBUG
+      CHECK(abs(itensor::norm(Dv)), 1);
+      
+      
+      
+      #endif
+
       //Get physical indices (i.e. not bond)
       auto siteIndsL = uniqueInds(basisL, {D});
       auto siteIndsR =  uniqueInds(basisR, {D});
 
       //Vectorise physical indices
-      auto [CL,csiteIndsL] = combiner(siteIndsL);
-      auto [CR,csiteIndsR] = combiner(siteIndsR);
+      auto [CL,csiteIndsL] = combiner(dag(siteIndsL));
+      auto [CR,csiteIndsR] = combiner(dag(siteIndsR));
       const int sdimL = dim(csiteIndsL);
       const int sdimR = dim(csiteIndsR);
 
@@ -335,11 +342,13 @@ namespace itensor{
 	{
 
 	  //Set up a dummy index so matrix QR can be used on vector
-	  Index dummyInd = hasQNs(csiteIndsL) ? Index(qn(csiteIndsL,1),1) : Index(1);
+	  Index dummyInd = hasQNs(csiteIndsL) ? dag(Index(qn(csiteIndsL,1),1)) : Index(1);
 	  ITensor dummyT = ITensor(dummyInd);
 	  dummyT.set(1,1.0);
 
 	  auto idL = getId(presL, b+1)*dummyT;
+	  //PrintData(idL);
+	  //PrintData(CL);
 	  auto idR = getId(b+1, presR+1)*dummyT;
 
 	  Args qrArgs = Args{"Complete", true};
@@ -347,21 +356,19 @@ namespace itensor{
 	  auto [QidL, RidL] = qr(CL*idL, csiteIndsL, qrArgs);
 	  auto [QidR, _unused2] = qr(CR*idR, csiteIndsR, qrArgs);
 
-	  auto [QbasisL, RbasisL] = qr(QidL.dag()*(CL*basisL), indDL, qrArgs);
-	  auto [QbasisR, RbasisR] = qr(QidR.dag()*(CR*basisR), indDR, qrArgs);
+	  auto [QbasisL, RbasisL] = qr(QidL*(dag(CL)*basisL), indDL, qrArgs);
+	  auto [QbasisR, RbasisR] = qr(QidR*(dag(CR)*basisR), indDR, qrArgs);
 
 	  auto qrLinkL = commonIndex(QbasisL, RbasisL);
 	  auto qrLinkR =  commonIndex(QbasisR, RbasisR);
 	  //PrintData(D);
-	  D = QbasisL.conj() * D * QbasisR;
+	  D = QbasisL * D * QbasisR;
 	  auto connectedComp = (D*setElt(qrLinkL=1).dag())*(D*setElt(qrLinkR=1).dag())/eltC(D,1,1);
 	  D -= connectedComp;
-	  PrintData(D.inds());
+	  //PrintData(D.inds());
 
 	  auto subindL = reduceDimTop(qrLinkL, sdimL);
-	  auto subindR = reduceDimTop(qrLinkR, sdimR);
-	  
-	  
+	  auto subindR = reduceDimTop(qrLinkR, sdimR); 
 	 
 	  ITensor subD{subindL, subindR};
 	   
@@ -372,7 +379,7 @@ namespace itensor{
 		if (abs(el) > 0)
 		  subD.set(i-sdimL,j-sdimR, el);
 	      }
-	  PrintData(subD.inds());
+	  //PrintData(subD.inds());
 
 	  int subMaxDim = maxDim;
 	  subMaxDim -= sdimL + sdimR;
@@ -395,7 +402,7 @@ namespace itensor{
 		  //accurate SVD method in the MatrixRef library
 		  ITensor W(subindL),S,V;
 		  res = svd(subD,W,S,V,args);
-		  PrintData(S.inds());
+		  //PrintData(S.inds());
 		  subD = W*S*V;
 		}
 	      else
@@ -424,7 +431,7 @@ namespace itensor{
 
 	  //A_[b] *= QbasisL.dag()*D*QbasisR.dag();
 	  //auto newAA = A_[b]*A_[b+1];
-	  auto newAA = QbasisL.dag()*D*QbasisR.dag();
+	  auto newAA = dag(QbasisL)*D*dag(QbasisR);
 	  //PrintData(newAA);
 
 	  if(usesvd || (noise == 0 && presCutoff < 1E-12))
@@ -436,7 +443,7 @@ namespace itensor{
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
-	      PrintData(Dv.inds());
+	      //PrintData(Dv.inds());
 	      if(args.getBool("DoNormalize",false))
 		{
 		  Dv *= 1./itensor::norm(Dv);
