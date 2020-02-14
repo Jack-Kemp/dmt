@@ -8,32 +8,21 @@
 #include<functional>
 #include<vector>
 
-struct Flags {
-  bool periodic, antiperiodic, odd_sector, eentropy_growth;
-  bool excited_state, correlations_decay, eentropy_c, plaqexp;
-  bool leg_inversion; bool rung_basis;
-};
 
-template <class A, class B>
+template <class A, class B, class C>
 std::string construct_label(const std::string& base,
                             const std::string& vary,
-                            Flags f, A params, B params_int){
+                            A reals, B bools, C ints){
  std::string label = base;
-  if (f.periodic) label +=  "_periodic";
-  else if (f.antiperiodic) label +=  "_antiperiodic";
-  else label +=  "_open";
-  if (not f.rung_basis){
-    if (not f.leg_inversion){
-      if (f.odd_sector) label += "_odd";
-      else label += "_even";
-    }
-  }
-  for (auto const& x : params)
+  if (bools["vectorized"]) label +=  "_vec";
+  if (bools["conserveQNs"]) label += "_cons";
+      
+  for (auto const& x : reals)
     {
       label += "_" + x.first + "_";
       label += (x.first == vary ? "vary" : std::to_string(x.second));
     }
-  for (auto const& x : params_int)
+  for (auto const& x : ints)
     {
       label += "_" + x.first + "_";
       label += (x.first == vary ? "vary" : std::to_string(x.second));
@@ -46,7 +35,7 @@ void readfromFile (std::string iName, X& x){
         std::ifstream file;
         file.open(iName.c_str());
         if (file)
-        	for  (int i =0; i<x.size()&& file >> x[i]; i++);
+        	for  (uint i =0; i<x.size()&& file >> x[i]; i++);
         else std::cout<<"Could not open file!"<<std::endl;
 }
 
@@ -59,12 +48,13 @@ void writeToFile (std::string iName,const  X& x, bool rewrite){
           outfile.open(iName.c_str(), std::ios::app);
         if (outfile){
         outfile << std::string("# ") + iName<<'\n';
-        for (int i =0; i<x.size();i++)
+        for (uint i =0; i<x.size();i++)
             outfile<< x[i]<<'\n';
         outfile.flush();
         outfile.close();
         }
 }
+
 
 template<typename X, typename Y>
 void writeToFile (std::string iName,const  X& x, const  Y& y, bool rewrite){
@@ -76,7 +66,7 @@ void writeToFile (std::string iName,const  X& x, const  Y& y, bool rewrite){
           outfile.open(iName.c_str(), std::ios::app);
         if (outfile){
         outfile << std::string("# ") + iName<<'\n';
-        for (int i =0; i<x.size();i++)
+        for (uint i =0; i<x.size();i++)
             outfile<< x[i]<<" "<<y[i]<<'\n';
         outfile.flush();
         outfile.close();
@@ -96,7 +86,7 @@ void writeToFile (std::string iName,const  X& x, const  Y& y, bool rewrite){
           outfile.open(iName.c_str(), std::ios::app);
         if (outfile){
         outfile << std::string("# ") + iName<<'\n';
-        for (int i =0; i<x.size();i++)
+        for (uint i =0; i<x.size();i++)
             outfile<< x[i]<<" "<<y[i]<<" "<<z[i]<<'\n';
         outfile.flush();
         outfile.close();
@@ -104,5 +94,30 @@ void writeToFile (std::string iName,const  X& x, const  Y& y, bool rewrite){
         }
         else std::cout<<"Sizes are not equal!";
 }
+
+template<typename X>
+void write2DToFile (std::string iName,const  X& x, bool rewrite = true){
+	if(x.size() > 0){
+	  if(x[0].size() > 0){
+	    std::ofstream outfile;
+	    if (rewrite)
+	      outfile.open(iName.c_str(), std::ios::trunc);
+	    else
+	      outfile.open(iName.c_str(), std::ios::app);
+	    if (outfile){
+	      outfile << std::string("# ") + iName<<'\n';
+	      for (uint i =0; i<x.size();i++)
+		{
+		for(uint j=0; j<x[0].size();j++)
+		  outfile<< x[i][j]<<' ';
+		outfile<<'\n';
+		}
+	      outfile.flush();
+	      outfile.close();
+	    }
+	  }
+	}
+}
+
 
 #endif

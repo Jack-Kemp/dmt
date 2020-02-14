@@ -83,7 +83,7 @@ namespace itensor{
   }
 
   BondGate
-  VecMPOBondGate(SiteSet const& sites,
+  vecMPOBondGate(SiteSet const& sites,
 			ITensor const& unit,
          int i1, 
          int i2,
@@ -122,8 +122,7 @@ namespace itensor{
     return BondGate(sites, i1,i2,gate);
     }
 
-  class DMTDensityMatrix
-  
+  class DMT
   {
     int presRange_ = 1;
     bool vectorized_ = false;
@@ -132,43 +131,8 @@ namespace itensor{
     MPO rho_;
     std::vector<ITensor> vecCombs;
     IndexSet vecInds;
-
-    ITensor
-    get_Aid_prodL(int presL)
-    {
-      if (not vectorized_)
-	{
-	return traceSubsection(rho_, 1, presL);
-	}
-      else
-	{
-	  auto ret = (op(sites_,"Id",1)*vecCombs[0])*rho_(1); 
-	  for(int i=2; i<presL; i++)
-	    {
-	      ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
-	    }
-	  return ret;
-      }	
-    }
-
-    ITensor
-    get_Aid_prodR(int presR)
-    {
-      int lr = length(rho_);
-       if (not vectorized_)
-	{
-	  return traceSubsection(rho_, presR+1, lr+1);
-	}
-       else
-	 {
-	   auto ret = (op(sites_,"Id",lr)*vecCombs[lr-1])*rho_(lr); 
-	   for(int i= lr-1; i>presR; i--)
-	     {
-	       ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
-	     }
-	   return ret;
-	 }	
-    }
+    
+  public:
 
     ITensor
     getId(int siteStart, int siteEnd){
@@ -186,8 +150,66 @@ namespace itensor{
 	}   
     return id;
   }
-    
-  public:
+
+
+    ITensor
+    siteOp(const char* op_name, int site_i){
+      if(vectorized_)
+	return op(sites_, "Id", site_i)*vecCombs[site_i-1];
+      else
+	return op(sites_, "Id", site_i);
+    }
+
+
+    ITensor
+    traceLeftOf(int presL)
+    {
+      if (presL > 1) {
+	if (not vectorized_)
+	  {
+	    return traceSubsection(rho_, 1, presL);
+	  }
+	else
+	  {
+	    auto ret = (op(sites_,"Id",1)*vecCombs[0])*rho_(1); 
+	    for(int i=2; i<presL; i++)
+	      {
+		ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
+	      }
+	    return ret;
+	  }
+      }
+      return ITensor(1);
+    }
+
+    ITensor
+    traceRightOf(int presR)
+    {
+      if (presR < length(rho_)){
+	int lr = length(rho_);
+	if (not vectorized_)
+	  {
+	    return traceSubsection(rho_, presR+1, lr+1);
+	  }
+	else
+	  {
+	    auto ret = (op(sites_,"Id",lr)*vecCombs[lr-1])*rho_(lr); 
+	    for(int i= lr-1; i>presR; i--)
+	      {
+		ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
+	      }
+	    return ret;
+	  }
+      }
+      return ITensor(1);
+    }
+
+    ITensor traceOf(int site_i){
+      if(vectorized_)
+	return (op(sites_,"Id", site_i)*vecCombs[site_i-1])*rho_(site_i);
+      else
+	return rho_(site_i) * delta(dag(siteInds(rho_, site_i)));
+    }
 
     const SiteSet &
     sites () const { return sites_;}
@@ -198,16 +220,34 @@ namespace itensor{
     bool
     vectorized() const {return vectorized_;}
 
+    int
+    len() const { return length(rho_);}
+
     MPO &
-    rho(){
+    rhoRef(){
       return rho_;
     }
 
-    const std::vector<ITensor> &
-    vecCombiners(){ return vecCombs;}
+    const MPO &
+    rho() const{
+      return rho_;
+    }
 
     const ITensor &
-    vecC(int i) { return vecCombs[i-1];}
+    rho(const int & i) const{
+      return rho_(i);
+    }
+
+    ITensor &
+    rhoRef(const int & i){
+      return rho_.ref(i);
+    }
+
+    const std::vector<ITensor> &
+    vecCombiners() const{ return vecCombs;}
+
+    const ITensor &
+    vecC(int i) const{ return vecCombs[i-1];}
 
     const Index &
     vecInd(int i) { return vecInds[i-1];}
@@ -225,7 +265,7 @@ namespace itensor{
 	  auto Combs = {vecC(b), vecC(b+1)};
 	  auto hsupterm = kron(idterm, hterm, siteInds, vecInds)
 	    - kron(hterm, idterm, siteInds, vecInds);
-	  return VecMPOBondGate(sites_,
+	  return vecMPOBondGate(sites_,
 				   kron(idterm, idterm, siteInds, vecInds),
 				   b,b+1,BondGate::tReal,tstep/2.,hsupterm);
 	}
@@ -314,12 +354,8 @@ namespace itensor{
 	basisR *= rho_(presR - i);
 
       //Get product of tensors for the identity on all non-preserved sites
-      if (presL > 1){
-	basisL *= this->get_Aid_prodL(presL);
-	//PrintData( this->get_Aid_prodL(presL));
-		}
-      if (presR < length(rho_))
-	basisR *= this->get_Aid_prodR(presR);
+      basisL *= this->traceLeftOf(presL);
+      basisR *= this->traceRightOf(presR);
 
       #ifdef DEBUG
       CHECK(abs(itensor::norm(Dv)), 1);
@@ -527,6 +563,9 @@ namespace itensor{
 	{	  
 	  rho_.ref(i) *= vecCombs[i-1];
 	}
+      vecCombs.clear();
+      vecInds.clear();
+      siteIndsStore_.clear();
     }
 
 
@@ -586,15 +625,7 @@ namespace itensor{
     {
       this->svdBond(b,AA,dir, LocalOp(), args);
     }
-
-
-
-    
-    
-    
-
-    
-    
+  
 
   };
 

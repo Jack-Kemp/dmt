@@ -1,9 +1,9 @@
 #ifndef MPOTEBD_H
 #define MPOTEBD_H
 
-#include "density_matrix.h"
+#include "DMT.h"
 #include <itensor/mps/bondgate.h>
-#include <itensor/mps/TEvolObserver.h>
+#include "DMTObserver.h"
 
 namespace itensor {
 
@@ -63,21 +63,14 @@ BondGate MPOBondGate(SiteSet const& sites,
 // Arguments recognized:
 //    "Verbose": if true, print useful information to stdout
 //
-template <class Iterable>
-void
-gateTEvol(Iterable const& gatelist, 
-          Real ttotal, 
-          Real tstep, 
-          DMTDensityMatrix & psi, 
-          Args const& args = Args::global());
 
 template <class Iterable>
 void
 gateTEvol(Iterable const& gatelist, 
           Real ttotal, 
           Real tstep, 
-          DMTDensityMatrix & psi, 
-          Observer& obs,
+          DMT & psi, 
+          DMTObserver& obs,
           Args args = Args::global());
 
 //
@@ -90,20 +83,20 @@ void
 gateTEvol(Iterable const& gatelist, 
           Real ttotal, 
           Real tstep, 
-          DMTDensityMatrix & dmt, 
-          Observer& obs,
+          DMT & dmt, 
+          DMTObserver& obs,
           Args args)
     {
     const bool verbose = args.getBool("Verbose",false);
-    const int MaxDim = args.getInt("MaxDim", 0);
+    const int maxDim = args.getInt("MaxDim", 0);
     const int nt = int(ttotal/tstep+(1e-9*(ttotal/tstep)));
     if(fabs(nt*tstep-ttotal) > 1E-9)
         {
         Error("Timestep not commensurate with total time");
         }
-    MPO & psi = dmt.rho();
+    MPO & psi = dmt.rhoRef();
     int siteDim = dim(siteIndex(psi, 1));
-    if(MaxDim < pow(siteDim*siteDim, dmt.presRange()))
+    if(maxDim < pow(siteDim*siteDim, dmt.presRange()))
        printfln("Warning: MaxDim < Dimension of preserved range in DMT.");
     
     if(verbose) 
@@ -119,6 +112,13 @@ gateTEvol(Iterable const& gatelist,
     psi.position(gatelist.front().i1());
 
     Real tsofar = 0;
+
+    //Initial measurement
+    args.add("TimeStepNum",0);
+    args.add("Time",tsofar);
+    args.add("TotalTime",ttotal);
+    obs.interrupt(dmt, args);
+    
     for(auto tt : range1(nt))
         {
         auto g = gatelist.begin();
@@ -168,7 +168,7 @@ gateTEvol(Iterable const& gatelist,
         args.add("TimeStepNum",tt);
         args.add("Time",tsofar);
         args.add("TotalTime",ttotal);
-        obs.measure(args);
+        obs.interrupt(dmt, args);
         }
     if(verbose) 
         {
@@ -176,18 +176,6 @@ gateTEvol(Iterable const& gatelist,
         }
 
     } // gateTEvol
-
-template <class Iterable>
-void
-gateTEvol(Iterable const& gatelist, 
-          Real ttotal, 
-          Real tstep, 
-          DMTDensityMatrix & dmt, 
-          Args const& args)
-    {
-    TEvolObserver obs(args);
-    return gateTEvol(gatelist,ttotal,tstep,dmt,obs,args);
-    }
 
 } //namespace itensor
 
