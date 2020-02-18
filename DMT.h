@@ -337,11 +337,13 @@ namespace itensor{
       std::string opStr_j = op_name_j;
       Args st =  {"Super", true};
       if (vectorBasis_){
-	auto braOp = op(sites_, opStr_i + "Idh", site_i, st)
-	  *op(sites_, opStr_j + "Idh", site_j, st);
+	auto braOp = op(sites_, "h"+opStr_i + "Id", site_i, st)
+	  *op(sites_, "h"+opStr_j + "Id", site_j, st);
+	PrintData(op_name_i);
+	PrintData(op_name_j);
 	PrintData(braOp);
-	auto ketOp = op(sites_, "Idh" + opStr_i, site_i, st)
-	  *op(sites_, "Idh" + opStr_j, site_j, st);
+	auto ketOp = op(sites_, "hId" + opStr_i, site_i, st)
+	  *op(sites_, "hId" + opStr_j, site_j, st);
 	PrintData(ketOp);
 	PrintData(braOp-ketOp);
 	return braOp - ketOp;	
