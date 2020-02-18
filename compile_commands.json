@@ -1,0 +1,27 @@
+[
+ {
+  "directory": "/home/kempl/Programming/itensor-dmt", 
+  "arguments": [
+   "g++", 
+   "-m64", 
+   "-std=c++17", 
+   "-fPIC", 
+   "-c", 
+   "-I.", 
+   "-I/home/kempl/Programming/ITensor", 
+   "-I/opt/intel/mkl/include", 
+   "-O3", 
+   "-DNDEBUG", 
+   "-Wall", 
+   "-march=native", 
+   "-Wno-unused-variable", 
+   "-Wno-unused-result", 
+   "-Wno-deprecated-declarations", 
+   "-Wno-ignored-attributes", 
+   "-o", 
+   "dmt.o", 
+   "dmt.cc"
+  ], 
+  "file": "dmt.cc"
+ }
+]

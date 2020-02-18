@@ -13,7 +13,7 @@ APP=xyz
 
 # 4. Add any headers your program depends on here. The make program
 #    will auto-detect if these headers have changed and recompile your app.
-HEADERS=DMT.h DMTObserver.h inputOutputUtilities.h calculateObservables.h gateTevol.h
+HEADERS=DMT.h DMTObserver.h inputOutputUtilities.h calculateObservables.h gateTevol.h HermitianSpinHalf.h
 
 # 5. For any additional .cc files making up your project,
 #    add their full filenames here.

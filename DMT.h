@@ -1,5 +1,5 @@
-#ifndef DENSITY_MATRIX_H
-#define DENSITY_MATRIX_H
+#ifndef DMT_H
+#define DMT_H
 
 #include<itensor/all.h>
 #include <algorithm>
@@ -82,6 +82,33 @@ namespace itensor{
     return id;
   }
 
+
+    //Adapted from pull request: https://github.com/ITensor/ITensor/pull/212 
+  MPO
+  projector(const MPS & psi)
+  {
+    const int len = length(psi);
+    MPO proj (len);
+    auto linkBra = commonIndex(psi.A(1),psi.A(2));
+    auto linkKet = commonIndex(prime(dag(psi.A(1))),prime(dag(psi.A(2))));
+    auto [CL,cindl]  = combiner({linkBra, linkKet}, {"Tags=","Link, l=1"});
+    proj.ref(1) =  psi(1)*prime(dag(psi(1)))*CL;
+    CL = dag(CL);
+    for (int i =2; i < len; i++)
+      {
+	auto linkBra = commonIndex(psi.A(i),psi.A(i+1));
+	auto linkKet = commonIndex(prime(dag(psi.A(i))),prime(dag(psi.A(i+1))));
+	auto [CR,cindr]  = combiner({linkBra, linkKet},
+				    {"Tags=","Link, l=" + std::to_string(i)});
+	proj.ref(i) = psi(i)*prime(dag(psi(i)))*CL*CR;
+	CL = std::move(dag(CR));
+      }
+    proj.ref(len) = psi(len)*prime(dag(psi(len)))*CL;
+    return proj;
+  }
+
+  
+
   BondGate
   vecMPOBondGate(SiteSet const& sites,
 			ITensor const& unit,
@@ -124,57 +151,40 @@ namespace itensor{
 
   class DMT
   {
-    int presRange_ = 1;
+    int presRange_;
     bool vectorized_ = false;
+    bool cacheTrace_;
+    bool vectorBasis_;
+    Real ctrace_;
+    bool hasLinks_ = false;
+    std::vector<ITensor> ctraceLeftOf_{};
+    std::vector<ITensor> ctraceRightOf_{};
     std::vector<IndexSet> siteIndsStore_{};
     SiteSet sites_;
+
+    //With two indices rho_(i) should have site indices <Out> <In>'
+    //in opposite conventio to normal MPOs but to match MPS <Out>,
+    //as rho_ more akin to a wavefuntion than an opeator.
     MPO rho_;
+    
     std::vector<ITensor> vecCombs;
     IndexSet vecInds;
-    
-  public:
-
-    ITensor
-    getId(int siteStart, int siteEnd){
-      ITensor id = op(sites_, "Id", siteStart);
-      if (vectorized_)
-	{
-	id *= vecCombs[siteStart-1];
-	for (int i = siteStart+1; i<siteEnd; i++)
-	  id *= op(sites_, "Id", i)*vecCombs[i-1];
-      }
-      else
-	{
-	  for (int i = siteStart+1; i<siteEnd; i++)
-	    id *= op(sites_, "Id", i);
-	}   
-    return id;
-  }
 
 
     ITensor
-    siteOp(const char* op_name, int site_i){
-      if(vectorized_)
-	return op(sites_, "Id", site_i)*vecCombs[site_i-1];
-      else
-	return op(sites_, "Id", site_i);
-    }
-
-
-    ITensor
-    traceLeftOf(int presL)
+    traceLeftOf_(int presL) const
     {
       if (presL > 1) {
-	if (not vectorized_)
+	if (not vectorized_ and not vectorBasis_)
 	  {
 	    return traceSubsection(rho_, 1, presL);
 	  }
 	else
 	  {
-	    auto ret = (op(sites_,"Id",1)*vecCombs[0])*rho_(1); 
+	    auto ret = siteOp("Id",1)*rho_(1); 
 	    for(int i=2; i<presL; i++)
 	      {
-		ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
+		ret *= siteOp("Id",i)*rho_(i); 
 	      }
 	    return ret;
 	  }
@@ -183,32 +193,163 @@ namespace itensor{
     }
 
     ITensor
-    traceRightOf(int presR)
+    traceRightOf_(int presR) const
     {
       if (presR < length(rho_)){
 	int lr = length(rho_);
-	if (not vectorized_)
+	if (not vectorized_ and not vectorBasis_)
 	  {
 	    return traceSubsection(rho_, presR+1, lr+1);
 	  }
 	else
 	  {
-	    auto ret = (op(sites_,"Id",lr)*vecCombs[lr-1])*rho_(lr); 
+	    auto ret = siteOp("Id",lr)*rho_(lr); 
 	    for(int i= lr-1; i>presR; i--)
 	      {
-		ret *= (op(sites_,"Id",i)*vecCombs[i-1])*rho_(i); 
+		ret *= siteOp("Id",i)*rho_(i); 
 	      }
 	    return ret;
 	  }
       }
       return ITensor(1);
+    } 
+
+    Real
+    trace_() const{
+      if (not vectorized_ and not vectorBasis_)
+	  {
+	    return traceC(rho_).real();
+	  }
+      else
+	{
+	  auto ret = siteOp("Id", 1)*rho_(1); 
+	  for(int i=2; i<=length(rho_); i++)
+	    {
+	      ret *= siteOp("Id",i)*rho_(i); 
+	    }
+	  return eltC(ret).real();
+	}
+    }
+    
+  public:
+
+    
+    void
+    updateTraceCache()
+    {
+      updateTraceCacheLeft();
+      updateTraceCacheRight();
     }
 
-    ITensor traceOf(int site_i){
+    void
+    updateTraceCacheLeft()
+    {
+      ctraceLeftOf_[0] = ITensor(1);
+      for (int i = 1; i < len(); i++)
+	{
+	  ctraceLeftOf_[i] = traceOf(i)*ctraceLeftOf_[i-1];
+	}
+      ctrace_ = eltC(ctraceLeftOf_[len()-1]*traceOf(len())).real(); 
+    }
+
+    void
+    updateTraceCacheRight()
+    {
+      ctraceRightOf_[len()-1] = ITensor(1);
+      for (int i = len()-2; i >= 0; i--)
+	{
+	  ctraceRightOf_[i] = traceOf(i+2)*ctraceRightOf_[i+1];  
+	}
+    }
+
+    void
+    updateTraceCacheOneSite(int site, Direction dir)
+    {
+      if(dir == Fromleft)
+	ctraceLeftOf_[site] = traceOf(site)*ctraceLeftOf_[site-1];
+      else
+	ctraceRightOf_[site-1] = traceOf(site+1)*ctraceRightOf_[site];
+    }
+
+    ITensor
+    traceLeftOf(int presL) const
+    {
+      return cacheTrace_ ? ctraceLeftOf_[presL-1] : traceLeftOf_(presL); 
+    }
+
+    ITensor
+    traceRightOf(int presR) const
+    {
+      return cacheTrace_ ? ctraceRightOf_[presR-1] : traceRightOf_(presR); 
+    } 
+
+    Real
+    trace() const {
+      return cacheTrace_ ? ctrace_ : trace_(); 
+    }
+
+     ITensor
+     traceOf(int site_i) const{
       if(vectorized_)
 	return (op(sites_,"Id", site_i)*vecCombs[site_i-1])*rho_(site_i);
-      else
+      else if (vectorBasis_)
+	return op(sites_,"Idh", site_i)*rho_(site_i);
+      else 
 	return rho_(site_i) * delta(dag(siteInds(rho_, site_i)));
+    }
+
+
+    ITensor
+    getId(int siteStart, int siteEnd){
+      ITensor id = siteOp("Id", siteStart);
+      for (int i = siteStart+1; i<siteEnd; i++)
+	id *= siteOp("Id", i); 
+      return id;
+    }
+
+    ITensor
+    siteOp(const char* op_name, int site_i) const{
+      if(vectorized_)
+	return op(sites_, op_name, site_i)*vecCombs[site_i-1];
+      else if(vectorBasis_){
+	std::string op_nameh = op_name;
+	return op(sites_, op_nameh + 'h', site_i);
+      }
+      else
+	return op(sites_, op_name, site_i);
+    }
+
+    ITensor
+    stateOp(const char* op_name, int site_i) const{
+      if(vectorBasis_){
+	return siteOp(op_name, site_i);
+      }
+      else if (vectorized_)
+	return swapPrime(op(sites_, op_name, site_i),0,1)*vecCombs[site_i-1];
+      else
+	return swapPrime(op(sites_, op_name, site_i),0,1);
+    }
+
+    ITensor
+     twoSiteOpH(const char* op_name_i, int site_i,
+	       const char* op_name_j, int site_j) const {
+      std::string opStr_i = op_name_i;
+      std::string opStr_j = op_name_j;
+      Args st =  {"Super", true};
+      if (vectorBasis_){
+	auto braOp = op(sites_, opStr_i + "Idh", site_i, st)
+	  *op(sites_, opStr_j + "Idh", site_j, st);
+	PrintData(braOp);
+	auto ketOp = op(sites_, "Idh" + opStr_i, site_i, st)
+	  *op(sites_, "Idh" + opStr_j, site_j, st);
+	PrintData(ketOp);
+	PrintData(braOp-ketOp);
+	return braOp - ketOp;	
+      }
+      else
+	{
+	return op(sites_, op_name_i, site_i)*op(sites_, op_name_j, site_j);
+      }
     }
 
     const SiteSet &
@@ -220,28 +361,22 @@ namespace itensor{
     bool
     vectorized() const {return vectorized_;}
 
+    bool
+    vectorBasis() const {return vectorBasis_;}
+
     int
     len() const { return length(rho_);}
 
     MPO &
-    rhoRef(){
-      return rho_;
-    }
+    rhoRef(){ return rho_; }
 
     const MPO &
-    rho() const{
-      return rho_;
-    }
+    rho() const{ return rho_; }
 
     const ITensor &
-    rho(const int & i) const{
-      return rho_(i);
-    }
+    rho(const int & i) const{ return rho_(i);}
 
-    ITensor &
-    rhoRef(const int & i){
-      return rho_.ref(i);
-    }
+    ITensor & rhoRef(const int & i){ return rho_.ref(i); }
 
     const std::vector<ITensor> &
     vecCombiners() const{ return vecCombs;}
@@ -250,35 +385,35 @@ namespace itensor{
     vecC(int i) const{ return vecCombs[i-1];}
 
     const Index &
-    vecInd(int i) { return vecInds[i-1];}
+    vecInd(int i) const { return vecInds[i-1];}
 
     BondGate
-    calcGate (ITensor hterm, double tstep, int leftSite)
+    calcGate (ITensor hterm, double tSweep, int leftSite) const
     {
       int b = leftSite;
       if (vectorized_)
 	{
-	  //hterm = (hterm*dmt.vecC(b))*dmt.vecC(b+1);
-	  auto idterm  = op(sites_,"Id",b)*op(sites_,"Id",b+1);
+	  auto idterm  = twoSiteOpH("Id",b, "Id",b+1);
 	  IndexSet siteInds = idterm.inds();
 	  IndexSet vecInds = IndexSet(vecInd(b), vecInd(b+1));
-	  auto Combs = {vecC(b), vecC(b+1)};
 	  auto hsupterm = kron(idterm, hterm, siteInds, vecInds)
 	    - kron(hterm, idterm, siteInds, vecInds);
 	  return vecMPOBondGate(sites_,
 				   kron(idterm, idterm, siteInds, vecInds),
-				   b,b+1,BondGate::tReal,tstep/2.,hsupterm);
+				   b,b+1,BondGate::tReal,tSweep/2.,hsupterm);
+	}
+      else if(vectorBasis_)
+	{
+	  return BondGate(sites_,b,b+1,BondGate::tReal,tSweep/2.,hterm);
 	}
       else
 	{
-	  auto gp = BondGate(sites_,b,b+1,BondGate::tReal,tstep/2.,hterm);
-	  auto gm = BondGate(sites_,b,b+1,BondGate::tReal,-tstep/2.,hterm);
+	  auto gp = BondGate(sites_,b,b+1,BondGate::tReal,tSweep/2.,hterm);
+	  auto gm = BondGate(sites_,b,b+1,BondGate::tReal,-tSweep/2.,hterm);
 	  return BondGate(sites_,b,b+1,
 			     mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3));
 	}
     }
-      
-
     
    
     std::vector<IndexSet>
@@ -296,18 +431,21 @@ namespace itensor{
             ITensor const& AA, 
             Direction dir,
 	    BigMatrixT const & PH,
-            Args & args = Args::global())
+            Args args = Args::global())
     {
 	  
       auto noise = args.getReal("Noise",0.);
       auto cutoff = args.getReal("Cutoff",MIN_CUT);
       auto presCutoff = args.getReal("PresCutoff",1e-15);
+      auto firstSVDCutoff = args.getReal("FirstSVDCutoff",1e-15);
       auto usesvd = args.getBool("UseSVD",false);
       int maxDim =  args.getInt("MaxDim", MAX_DIM);
+
       auto presArgs = Args{"Cutoff=",presCutoff};
+      auto firstSVDArgs = Args{"Cutoff=",firstSVDCutoff};
 	  
       //From MPS svdBond
-      //rho_.setBond(b); ???
+      //rho_.setBond(b); ??? I believe this only matter for write to disk
       if(dir == Fromleft && b-1 > rho_.leftLim())
 	{
 	  printfln("b=%d, l_orth_lim_=%d",b,rho_.leftLim());
@@ -332,7 +470,7 @@ namespace itensor{
       //PrintData(AA);
       //PrintData(rho_(b));
       //PrintData(rho_(b+1));
-      res = svd(AA,rho_.ref(b),D,rho_.ref(b+1), {"Cutoff", 1e-15});
+      res = svd(AA,rho_.ref(b),D,rho_.ref(b+1), firstSVDArgs);
       //PrintData(D.inds());
       auto indDL = commonIndex(rho_(b),D);
       auto indDR = commonIndex(rho_(b+1),D);
@@ -358,10 +496,7 @@ namespace itensor{
       basisR *= this->traceRightOf(presR);
 
       #ifdef DEBUG
-      CHECK(abs(itensor::norm(Dv)), 1);
-      
-      
-      
+      //CHECK(abs(itensor::norm(D)), 1); 
       #endif
 
       //Get physical indices (i.e. not bond)
@@ -418,7 +553,7 @@ namespace itensor{
 	  //PrintData(subD.inds());
 
 	  int subMaxDim = maxDim;
-	  subMaxDim -= sdimL + sdimR;
+	  subMaxDim -= sdimL + sdimR - 1;
 	  //rintData(subD);
 	  if (subMaxDim <= 0)
 	    {
@@ -530,13 +665,27 @@ namespace itensor{
 	  if(rho_.leftLim() > b-1) rho_.leftLim(b-1);
 	  rho_.rightLim(b+1);
 	}
+      updateTraceCacheOneSite(b, dir);
       return res;
     }
+
+    void
+    finishConstruction(Args args){
+      if(not hasLinks_)
+	putMPOLinks(rho_);
+      if (args.getBool("normalize"))
+	{
+        rho_ *= 1/trace_();
+	}
+      updateTraceCache();
+    }
+
+    
 
     auto
     vec()
     {
-      if(vectorized_)
+      if(vectorized_ or vectorBasis_)
 	Error("Cannot vectorize already vectorized MPO!");
       siteIndsStore_ = std::vector<IndexSet>(length(rho_));
       vectorized_ = true;
@@ -617,41 +766,67 @@ namespace itensor{
     }
     */
 
+
+     void
+    fromPureState(const MPS& psi){
+      if(vectorized_)
+	this->unvec();
+      rho_ = projector(psi);
+      hasLinks_ = true;
+      if(vectorized_)
+	this->vec();
+    }
+
+    
     void
     svdBond(int b, 
             ITensor const& AA, 
             Direction dir,
-            Args & args = Args::global())
+            Args args = Args::global())
     {
       this->svdBond(b,AA,dir, LocalOp(), args);
     }
-  
 
+
+    MPO& 
+    position(int i, Args args = Args::global()){
+      while(rho_.leftLim() < i-1)
+	{
+	  if(rho_.leftLim() < 0) rho_.leftLim(0);
+	  //setBond(rho_.leftLim()+1); Again, only fails for write to disk, I think
+	  auto WF = rho_(rho_.leftLim()+1) * rho_(rho_.leftLim()+2);
+	  auto original_link_tags = tags(linkIndex(rho_,rho_.leftLim()+1));
+	  svdBond(rho_.leftLim()+1,WF,Fromleft,{args,"LeftTags=",original_link_tags});
+	}
+      while(rho_.rightLim() > i+1)
+      {
+	if(rho_.rightLim() > len()+1) rho_.rightLim(len()+1);
+	//setBond(rho_.rightLim()-2);
+	auto WF = rho_(rho_.rightLim()-2) * rho_(rho_.rightLim()-1);
+	auto original_link_tags = tags(linkIndex(rho_,rho_.rightLim()-2));
+	svdBond(rho_.rightLim()-2,WF,Fromright,{args,"RightTags=",original_link_tags});
+      }
+      return rho_;
+    }
+
+
+    DMT(SiteSet sites, Args const& args = Args::global()): sites_(sites){
+      if(cacheTrace_){
+	ctraceLeftOf_.resize(length(sites_));
+	ctraceRightOf_.resize(length(sites_));
+      }
+      presRange_ = args.getInt("presRange", 1);
+      cacheTrace_ = args.getBool("cacheTrace", true);
+      vectorBasis_ = args.getBool("vectorBasis", false);
+      rho_ = MPO(sites);
+      if(args.getBool("vectorized", false))
+	this->vec();
+    }
+
+    
   };
 
-  //Adapted from pull request: https://github.com/ITensor/ITensor/pull/212 
-  MPO
-  projector(const MPS & psi)
-  {
-    const int len = length(psi);
-    MPO proj (len);
-    auto linkBra = commonIndex(psi.A(1),psi.A(2));
-    auto linkKet = commonIndex(prime(dag(psi.A(1))),prime(dag(psi.A(2))));
-    auto [CL,cindl]  = combiner({linkBra, linkKet}, {"Tags=","Link, l=1"});
-    proj.ref(1) =  psi(1)*prime(dag(psi(1)))*CL;
-    CL = dag(CL);
-    for (int i =2; i < len; i++)
-      {
-	auto linkBra = commonIndex(psi.A(i),psi.A(i+1));
-	auto linkKet = commonIndex(prime(dag(psi.A(i))),prime(dag(psi.A(i+1))));
-	auto [CR,cindr]  = combiner({linkBra, linkKet},
-				    {"Tags=","Link, l=" + std::to_string(i)});
-	proj.ref(i) = psi(i)*prime(dag(psi(i)))*CL*CR;
-	CL = std::move(dag(CR));
-      }
-    proj.ref(len) = psi(len)*prime(dag(psi(len)))*CL;
-    return proj;
-  }
+
 
 
 

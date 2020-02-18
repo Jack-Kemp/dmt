@@ -3,10 +3,18 @@
 
 #include<iostream>
 #include<fstream>
+#include<sstream>
 #include<string>
 #include<map>
 #include<functional>
 #include<vector>
+
+template<class A>
+std::string to_string_sstream(const A& num){	
+  std::ostringstream streamObj;
+  streamObj << num;
+  return streamObj.str();
+}
 
 
 template <class A, class B, class C>
@@ -20,7 +28,7 @@ std::string construct_label(const std::string& base,
   for (auto const& x : reals)
     {
       label += "_" + x.first + "_";
-      label += (x.first == vary ? "vary" : std::to_string(x.second));
+      label += (x.first == vary ? "vary" : to_string_sstream(x.second));
     }
   for (auto const& x : ints)
     {
