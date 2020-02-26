@@ -22,8 +22,9 @@ std::string construct_label(const std::string& base,
                             const std::string& vary,
                             A reals, B bools, C ints){
  std::string label = base;
-  if (bools["vectorized"]) label +=  "_vec";
-  if (bools["conserveQNs"]) label += "_cons";
+  if (bools["Vectorize"]) label +=  "_vec";
+  if (bools["HermitianBasis"]) label +=  "_herm";
+  if (bools["ConserveQNs"]) label += "_cons";
       
   for (auto const& x : reals)
     {
