@@ -204,6 +204,7 @@ namespace itensor{
       int b = leftSite;
       auto & s = *dmtSites_;
       bool verbose = args.getBool("Verbose", false);
+      bool swapOutputs = args.getBool("SwapOutputs", false);
       
       if (vectorized_)
 	{
@@ -233,7 +234,15 @@ namespace itensor{
 	    if (verbose) printfln("Hermitian basis, truncating imaginary part norm: %f", imagNorm);
 	    if (imagNorm > 1e-12)
 	      Error("Hermitian Basis but imaginary gate.");
-	    return BondGate(sites(),b,b+1, realPart(gate.gate()));
+	    gate = BondGate(sites(),b,b+1, realPart(gate.gate()));
+	  }
+	  if(swapOutputs){
+	    gate = BondGate(sites(),b,b+1,
+			    mapPrime(gate.gate()
+				     *delta(prime(vecInds[0]), prime(vecInds[1],2))
+				     *delta(prime(vecInds[1]), prime(vecInds[0],2)),
+				     2, 1)
+			    );
 	  }
 	  return gate;
 	}
@@ -241,6 +250,23 @@ namespace itensor{
 	{
 	  auto gp = BondGate(sites(),b,b+1,BondGate::tReal,tDelta,hterm);
 	  auto gm = BondGate(sites(),b,b+1,BondGate::tReal,-tDelta,hterm);
+
+	  if(swapOutputs)
+	    {
+	    gp =  BondGate(sites(),b,b+1,
+			   mapPrime(gp.gate()
+			   *delta(prime(dag(s.siteInd(b))), prime(s.siteInd(b+1),2))
+				    *delta(prime(dag(s.siteInd(b+1))), prime(s.siteInd(b),2)),
+				    2,1)
+			   );
+	    gm =   BondGate(sites(),b,b+1,
+			   mapPrime(gm.gate()
+			   *delta(prime(dag(s.siteInd(b))), prime(s.siteInd(b+1),2))
+				    *delta(prime(dag(s.siteInd(b+1))), prime(s.siteInd(b),2)),
+				    2,1)
+			   );
+	    }
+	  
 	  return BondGate(sites(),b,b+1,
 			     mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3));
 	}
@@ -362,27 +388,11 @@ namespace itensor{
 	  auto qrLinkR =  commonIndex(QbasisR, RbasisR);
 
 
-	  // auto ret = siteOp("Id", 1)*rho_(1); 
-	  // for(int i=2; i<=length(rho_); i++)
-	  //   {
-	  //     ret *= siteOp("Id",i)*rho_(i); 
-	  //   }
-
-	  // ret *= D;
-
-	  // PrintData(ret);
-
 	  D = QbasisL * D * QbasisR;
-
 	  
-
-	  //PrintData(AA.inds());
-	  //PrintData(D.inds());
-	 
-	  //PrintData(eltC(D,1,1)*eltC(RbasisL,1,1)*eltC(RbasisR,1,1));
-
 	  auto connectedComp = (D*setElt(qrLinkL=1).dag())*(D*setElt(qrLinkR=1).dag())/eltC(D,1,1);
 	  D -= connectedComp;
+	  
 
 	  auto subindL = reduceDimTop(qrLinkL, sdimL);
 	  auto subindR = reduceDimTop(qrLinkR, sdimR); 
@@ -397,7 +407,6 @@ namespace itensor{
 		  subD.set(i-sdimL,j-sdimR, el);
 	      }
 
-	  //bool full = false;
 	  int subMaxDim = maxDim;
 	  subMaxDim -= sdimL + sdimR-1;
 	  if (subMaxDim <= 0)
@@ -407,10 +416,7 @@ namespace itensor{
 	    }
 	  else
 	    {
-	      //Second SVD: trunc. non-preserved block.
-	      //PrintData(maxDim);
 	      args.add("MaxDim", subMaxDim);
-	      //PrintData(subMaxDim);
 	      args.add("RespectDegenerate",args.getBool("RespectDegenerate",true));
 	      if(useSVD)
 		{
@@ -418,12 +424,7 @@ namespace itensor{
 		  //accurate SVD method in the MatrixRef library
 		  ITensor W(subindL),S,V;
 		  res = svd(subD,W,S,V,args);
-		  //PrintData(S.inds());
 		  subD = W*S*V;
-		  // if(dim(S.inds()[0]) == subMaxDim){
-		  //   full = true;
-		  //   subD.fill(0);
-		  // }
 		}
 	      else
 		{
@@ -447,9 +448,6 @@ namespace itensor{
 
 	  D += connectedComp;
 
-	  //if(full)
-	  //  PrintData(D);
-
 	  //Reverse the basis transformation
 	  auto newAA = dag(QbasisL)*D*dag(QbasisR);
 
@@ -457,12 +455,10 @@ namespace itensor{
 	  // in second SVD.
 	  if(useSVDThird)
 	    {
-	      //PrintData(thirdSVDArgs);
 	      //Need high accuracy, use svd which calls the
 	      //accurate SVD method in the MatrixRef library
 	      ITensor Dv, Av(indDL), Bv(indDR);
 	      res = svd(newAA,Av,Dv,Bv,thirdSVDArgs);
-	      //PrintData(Dv.inds());
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested

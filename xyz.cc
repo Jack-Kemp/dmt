@@ -45,6 +45,9 @@ int main(int argc, char* argv[])
 					     "Jz",
 					     "Jx",
 					     "Jy",
+					     "J2z",
+					     "J2y",
+					     "J2x",
 					     "hz",
 					     "hx",
 					     "hy"};
@@ -57,6 +60,7 @@ int main(int argc, char* argv[])
   std::vector<std::string> paramNamesBool = {"Vectorize",
 					     "HermitianBasis",
 					     "FromPureState",
+					     "NextNearest",
 					     "ConserveQNs",
 					     "Normalize",
 					     "UseSVD",
@@ -95,6 +99,9 @@ int main(int argc, char* argv[])
   Real Jx = paramsReal.at("Jx");
   Real Jy = paramsReal.at("Jy");
   Real Jz = paramsReal.at("Jz");
+  Real J2x = paramsReal.at("J2x");
+  Real J2y = paramsReal.at("J2y");
+  Real J2z = paramsReal.at("J2z");
   Real delta = 0.5*Jx;
 
   auto svdMethod = input.getString("SVDMethod");
@@ -163,6 +170,15 @@ int main(int argc, char* argv[])
       trott.addNearestNeighbour("Sx","Sx", Jx);
       trott.addNearestNeighbour("Sy","Sy", Jy);
     }
+
+  if(paramsBool.at("NextNearest"))
+    {
+      trott.addLongRange("Sz", "Sz", 2, J2z);
+      trott.addLongRange("Sy", "Sy", 2, J2y);
+      trott.addLongRange("Sx", "Sx", 2, J2x);
+      
+    }
+    
   
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, {"Verbose", true});
   

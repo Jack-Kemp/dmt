@@ -1,11 +1,14 @@
 input
 {
 OutputDir = output
-OutputName = mgesddtest
+OutputName = longrangeswappedtest
 N = 20
 Jx = 0.5
 Jy = 0.5
 Jz = 1.0
+J2x = 0.0
+J2y = 0.0
+J2z = 1.0
 hx = 0.1
 hy = 1.1
 hz = 0.1
@@ -14,6 +17,7 @@ tTotal = 50.0
 nSweeps = 4
 PresRadius = 1
 Cutoff = 1e-16
+NextNearest = true
 FirstSVDCutoff = 1e-16
 ThirdSVDCutoff = 1e-10
 SVDMethod = gesdd

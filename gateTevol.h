@@ -97,7 +97,10 @@ namespace itensor {
         Error("Timestep not commensurate with total time");
       }
     int siteDim = dim(siteIndex(dmt.rho(), 1));
-    if(maxDim < pow(siteDim*siteDim, dmt.presRadius()))
+    int vecDim = siteDim;
+    if (not dmt.vectorized())
+      vecDim = siteDim*siteDim;
+    if(maxDim < pow(vecDim, dmt.presRadius()))
       printfln("Warning: MaxDim < Dimension of preserved range in DMT.");
     
     if(verbose) 

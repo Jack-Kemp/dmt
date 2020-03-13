@@ -6,7 +6,9 @@
 #include<map>
 #include<string>
 
+
 using Real = double;
+namespace itensor{
 
 //Optional args: bool repeat, int start, int end.
 //repeat=true or single value: couplings repeat between start and end inclusive.
@@ -55,41 +57,33 @@ public:
    
 };
 
- 
+
+BondGate swapInputOutput(const BondGate & gate, const SiteSet & sites)
+{
+  if(order(findInds(gate.gate(), "2")) > 0)
+    return BondGate(sites, gate.i1(), gate.i2(), swapPrime(swapPrime(gate.gate(),0,2),1,3));
+  else
+    return BondGate(sites, gate.i1(), gate.i2(), swapPrime(gate.gate(),0,1));
+}
 
 class TrotterConstructor {
   using MapCouplings = std::map<std::vector<std::string>, CouplingValues>;
   MapCouplings nearestNeighbour_;
+  std::map<int, MapCouplings> longRange_;
   MapCouplings singleSite_;
-  
-public:
 
-
-  template<typename ValueType>
-  void addNearestNeighbour(const std::string & opnameL,
-			   const std::string & opnameR,
-			   ValueType values,
-			   const Args & args = Args::global())
-  {
-    nearestNeighbour_[{opnameL, opnameR}] = CouplingValues(values, args);
-  }
-
-  template<typename ValueType>
-  void addSingleSite(const std::string & opnameL,
-			   ValueType values,
-			   const Args & args = Args::global())
-  {
-    singleSite_[{opnameL}] = CouplingValues (values, args);
-  }
 
   template<typename CalcGateClass>
-  std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
-						  SiteSet sites,
-						  Real tSweep, const Args& args = Args::global()) {
-    bool verbose = args.getBool("Verbose", false);
-    const int N  = length(sites);
-    std::vector<BondGate> gates;
-    for(int b = 1; b < N; ++b)
+  void 
+  construct2ndOrderSweepNearestNeighbour_(std::vector<BondGate>& gates,
+					  const CalcGateClass & calc,
+					  SiteSet& sites,
+					  Real tSweep,
+					  const Args & args){
+  bool verbose = args.getBool("Verbose", false);
+  const int N  = length(sites);
+
+  for(int b = 1; b < N; ++b)
     {
       auto hterm = ITensor(op(sites,"Id",1).inds());
       for (const auto& [opnames, cvals] : nearestNeighbour_){
@@ -99,9 +93,9 @@ public:
 
       for (const auto& [opnames, cvals] : singleSite_)
 	{
-	hterm += 0.5*cvals(b)*op(sites, opnames[0], b)*op(sites, "Id", b+1);
-	hterm += 0.5*cvals(b+1)*op(sites, "Id", b)*op(sites, opnames[0], b+1);
-	if (verbose) printfln((opnames[0] + " at %d: %f").c_str(), b, cvals(b));
+	  hterm += 0.5*cvals(b)*op(sites, opnames[0], b)*op(sites, "Id", b+1);
+	  hterm += 0.5*cvals(b+1)*op(sites, "Id", b)*op(sites, opnames[0], b+1);
+	  if (verbose) printfln((opnames[0] + " at %d: %f").c_str(), b, cvals(b));
 	}
       
       if(b == 1){
@@ -122,10 +116,162 @@ public:
     {
       gates.push_back(gates[b-1]);
     }
+}
 
+
+  template<typename CalcGateClass>
+  void 
+  construct2ndOrderSweepLongRange_(std::vector<BondGate>& gates,
+			      const CalcGateClass & calc,
+			      SiteSet& sites,
+			      Real tSweep,
+			      const Args & argsIn) {
+
+    Args args = argsIn;
+    auto criter =  longRange_.rbegin();
+    int range = criter->first;
+    bool verbose = args.getBool("Verbose", false);
+    const int N  = length(sites);
+     
+
+    for(int b = 1; b < N; ++b)
+      {
+	while (b + range > N) {
+	  ++criter;
+	  if (criter != longRange_.rend())
+	    range = criter->first;
+	  else
+	    range = 1;
+	}
+	auto hterm = ITensor(op(sites,"Id",1).inds());
+	for (const auto& [opnames, cvals] : nearestNeighbour_){
+	  hterm += cvals(b)*op(sites, opnames[0], b)*op(sites, opnames[1], b+1);
+	  if (verbose) printfln((opnames[0] + opnames[1] + " at %d,%d: %f").c_str(), b, b+1,  cvals(b));
+	}
+
+	for (const auto& [opnames, cvals] : singleSite_)
+	  {
+	    hterm += 0.5*cvals(b)*op(sites, opnames[0], b)*op(sites, "Id", b+1);
+	    hterm += 0.5*cvals(b+1)*op(sites, "Id", b)*op(sites, opnames[0], b+1);
+	    if (verbose) printfln((opnames[0] + " at %d: %f").c_str(), b, cvals(b));
+	  }
+      
+	if(b == 1){
+	  for (const auto& [opnames, cvals] : singleSite_)
+	    hterm += 0.5*cvals(b)*op(sites, opnames[0], b)*op(sites, "Id", b+1);
+	}
+
+	if(b == N-1){
+	  for (const auto& [opnames, cvals] : singleSite_){
+	    hterm += 0.5*cvals(b+1)*op(sites, "Id", b)*op(sites, opnames[0], b+1);
+	    if (verbose) printfln((opnames[0] + " at %d: %f").c_str(), b+1,  cvals(b+1));
+	  }
+	}
+
+	if (range == 1)
+	  {
+	    args.add("SwapOutputs", false);
+	    gates.push_back(calc.calcGate(hterm, tSweep/2, b, args)); //Notice over 2!!!!
+	  }
+      
+	else
+	  {
+	    int newgates = 0;
+	    args.add("SwapOutputs", true);
+	    gates.push_back(calc.calcGate(hterm, tSweep/4, b, args)); //Notice over 2!!!!
+	    newgates++;
+
+	    for (int sep = 2; sep < range; sep++){
+	      auto couplings = longRange_.find(sep);
+	      auto hterm = ITensor(op(sites,"Id",1).inds());
+	      if (couplings != longRange_.end())
+		for (const auto& [opnames, cvals] : couplings->second)
+		  {
+		    hterm += cvals(b)*op(sites, opnames[0], b+sep-1)*op(sites, opnames[1], b+sep);
+		    if (verbose) printfln((opnames[0] + opnames[1] + " at %d,%d: %f").c_str(), b, b+sep,  cvals(b));
+		  }
+	      else
+		hterm = op(sites, "Id", b+sep-1)*op(sites, "Id", b+sep);
+	      gates.push_back(calc.calcGate(hterm, tSweep/4, b+sep-1, args));
+	      newgates++;
+	    }
+
+	    auto couplings = longRange_.find(range);
+	    auto hterm = ITensor(op(sites,"Id",1).inds());
+	    for (const auto& [opnames, cvals] : couplings->second)
+	      {
+		hterm += cvals(b)*op(sites, opnames[0], b+range-1)*op(sites, opnames[1], b+range);
+		if (verbose) printfln((opnames[0] + opnames[1] + " at %d,%d: %f").c_str(), b, b+range,  cvals(b));
+	      }
+	    args.add("SwapOutputs", false);
+	    gates.push_back(calc.calcGate(hterm, tSweep/2, b+range-1, args));
+	    //Notice last gate added is not reversed and added back, but the rest are.
+	    for(int i = 0; i < newgates; ++i)
+	      {
+		  gates.push_back(gates[gates.size()-2-i]);
+	      }
+	  }
+      }
+    for(int b = gates.size(); b > 0; --b)
+      {
+	gates.push_back(gates[b-1]);
+      }
+  }
+  
+public:
+
+
+template<typename ValueType>
+void addLongRange(const std::string & opnameL,
+		  const std::string & opnameR,
+		  int latticeSeparation,
+		  ValueType values,
+		  const Args & args = Args::global())
+{
+  if (latticeSeparation == 1)
+    Error("Please use addNearestNeighbour for separation = 1.");
+  else if(latticeSeparation < 1)
+    Error("Cannot have separation less than 1.");
+  else
+    longRange_[latticeSeparation][{opnameL, opnameR}] = CouplingValues(values, args);
+}
+
+
+template<typename ValueType>
+void addNearestNeighbour(const std::string & opnameL,
+			 const std::string & opnameR,
+			 ValueType values,
+			 const Args & args = Args::global())
+{
+  nearestNeighbour_[{opnameL, opnameR}] = CouplingValues(values, args);
+}
+
+template<typename ValueType>
+void addSingleSite(const std::string & opnameL,
+		   ValueType values,
+		   const Args & args = Args::global())
+{
+  singleSite_[{opnameL}] = CouplingValues (values, args);
+}
+
+template<typename CalcGateClass>
+std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
+						SiteSet sites,
+						Real tSweep, const Args& args = Args::global())
+{
+  std::vector<BondGate> gates;
+  if(longRange_.empty())
+    construct2ndOrderSweepNearestNeighbour_(gates,calc, sites, tSweep, args);
+  else
+    construct2ndOrderSweepLongRange_(gates, calc, sites, tSweep, args);
+  // for (auto & gate : gates){
+  //   PrintData(gate.i1());
+  //   PrintData(gate.i2());
+  // }
+  
   return gates;
 
-  }
+}
 
 
 
@@ -134,4 +280,6 @@ public:
 
 };
 
+
+}
 #endif
