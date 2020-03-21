@@ -63,6 +63,7 @@ int main(int argc, char* argv[])
 					     "NextNearest",
 					     "ConserveQNs",
 					     "Normalize",
+					     "OnlyPreserveEnergyDensity",
 					     "UseSVD",
 					     "UseSVDThird",
 					     "AbsoluteCutoff",
@@ -145,10 +146,6 @@ int main(int argc, char* argv[])
 	  dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(2*(j %2)-1)*dmt.stateOp("Sz",j);
 	}
     }
-
-  dmt.finishConstruction();
-
-  PrintData(dmt.siteOp("Sy",1));
 			   
   //Set up Hamilitonian----------------------------------------------
 
@@ -181,6 +178,13 @@ int main(int argc, char* argv[])
     
   
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, {"Verbose", true});
+
+  //Set preserved operators and finish DMT set-up.
+
+  if(paramsBool.at("OnlyPreserveEnergyDensity"))
+    dmt.addPresOperator(trott.localEnergyDensity(sites), trott.maxRange()+1, true);
+
+  dmt.finishConstruction();
   
 
   //Set up measurements-----------------------------------------------

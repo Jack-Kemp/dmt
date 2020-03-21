@@ -2,6 +2,7 @@
 #define __ITENSOR_TROTTERCONSTRUCTOR_H
 
 #include<itensor/all.h>
+#include<ITensorUtilFunctions.h>
 #include<limits>
 #include<map>
 #include<string>
@@ -71,6 +72,7 @@ class TrotterConstructor {
   MapCouplings nearestNeighbour_;
   std::map<int, MapCouplings> longRange_;
   MapCouplings singleSite_;
+  int maxRange_ = 0;
 
 
   template<typename CalcGateClass>
@@ -108,7 +110,6 @@ class TrotterConstructor {
 	  if (verbose) printfln((opnames[0] + " at %d: %f").c_str(), b+1,  cvals(b+1));
 	}
       }
-      
       gates.push_back(calc.calcGate(hterm, tSweep/2, b, args)); //Notice over 2!!!!
     }
     
@@ -221,6 +222,7 @@ class TrotterConstructor {
 public:
 
 
+  int maxRange() const {return maxRange_;}
 template<typename ValueType>
 void addLongRange(const std::string & opnameL,
 		  const std::string & opnameR,
@@ -233,7 +235,10 @@ void addLongRange(const std::string & opnameL,
   else if(latticeSeparation < 1)
     Error("Cannot have separation less than 1.");
   else
+    {
     longRange_[latticeSeparation][{opnameL, opnameR}] = CouplingValues(values, args);
+    maxRange_ = maxRange_ < (latticeSeparation) ? (latticeSeparation) : maxRange_;
+    }
 }
 
 
@@ -244,6 +249,7 @@ void addNearestNeighbour(const std::string & opnameL,
 			 const Args & args = Args::global())
 {
   nearestNeighbour_[{opnameL, opnameR}] = CouplingValues(values, args);
+  maxRange_ = maxRange_ < 1 ? 1 : maxRange_;
 }
 
 template<typename ValueType>
@@ -260,7 +266,7 @@ std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
 						Real tSweep, const Args& args = Args::global())
 {
   std::vector<BondGate> gates;
-  if(longRange_.empty())
+  if(maxRange_ < 2)
     construct2ndOrderSweepNearestNeighbour_(gates,calc, sites, tSweep, args);
   else
     construct2ndOrderSweepLongRange_(gates, calc, sites, tSweep, args);
@@ -273,10 +279,35 @@ std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
 
 }
 
-
-
-
-
+  
+  ITensor localEnergyDensity(SiteSet sites){
+    int maxSupp = maxRange_ + 1;
+    auto hterm = ITensor(op(sites,"Id",1).inds());
+    for (int b = 1; b <= maxSupp; ++b)
+      {
+	for (const auto& [opnames, cvals] : singleSite_)
+	  {
+	    hterm += cvals(b)*getId(sites, 1, b)*op(sites, opnames[0], b)*getId(sites, b+1, maxSupp+1);
+	  }
+	if(b <= maxSupp - 1)
+	  for (const auto& [opnames, cvals] : nearestNeighbour_)
+	    {
+	      hterm += cvals(b)*getId(sites, 1, b)*op(sites, opnames[0], b)
+		*op(sites, opnames[1], b+1)*getId(sites, b+2, maxSupp+1);
+	    }
+	for (int sep = 2; sep <= std::min(maxSupp-sep, maxRange_); sep++){
+	  auto couplings = longRange_.find(sep);
+	  if (couplings != longRange_.end())
+	    for (const auto& [opnames, cvals] : couplings->second)
+	      {
+		hterm += cvals(b)*getId(sites, 1, b)*op(sites, opnames[0], b)
+		  *getId(sites, b+1, b+sep)*op(sites, opnames[1], b+sep)
+		  *getId(sites, b+sep+1, maxSupp+1);
+	      }
+	}
+      }
+    return hterm;
+  }
 
 };
 

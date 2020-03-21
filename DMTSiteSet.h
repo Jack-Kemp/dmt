@@ -54,6 +54,19 @@ namespace itensor
       return sites_.op(opname,i,args);
     }
 
+
+    virtual ITensor
+    convertToSiteOp(const ITensor & ten, int start, int end)
+    {
+      return ten;
+    }
+
+    virtual ITensor
+    convertToStateOp(const ITensor & ten, int start, int end)
+    {
+      return swapPrime(ten,0,1,"Site");
+    }
+
     Index
     siteInd(int i)
     {
@@ -86,7 +99,10 @@ namespace itensor
   //definition of vec() : 
 
   //Definition of basisChange:
-  //stateOp = bareOp*vecComb*basisChange
+  //stateOp = swapPrime(bareOp,0,1)*vecComb*basisChange
+  //op = bareOp*vecComb*conj(basisChange)
+
+  //These definitions keep op*stateOp = tr(op stateOp) as required.
   //Can be passed in as Matrix (untested!).
 
   //HermitianBasis: basisChange is chosen such that the stateOps are
@@ -129,8 +145,8 @@ namespace itensor
 	stateOps_[name] = swapPrime(sites_.op(name, 1),0,1)*vecCombs_[0];
 	if (changeBasis)
 	  {
-	  stateOps_[name] = noPrime(vecOps_[name]*basisChange_);
-	  vecOps_[name] = noPrime(vecOps_[name]*conj(swapPrime(basisChange_,0,1)));
+	  stateOps_[name] = noPrime(stateOps_[name]*basisChange_);
+	  vecOps_[name] = noPrime(vecOps_[name]*conj(basisChange_));
 	  }
       }
     }
@@ -200,6 +216,32 @@ namespace itensor
       else
 	constructVecOps(false);
     }
+
+
+    ITensor
+    convertToSiteOp(const ITensor & ten, int start, int end)
+    {
+      auto ret = ten;
+      for (int i = start; i < end; ++i)
+	{
+	  ret *= vecComb(i);
+	  ret *= conj(basisChange(i));
+	  }
+      return noPrime(ret, "Site");
+    }
+
+    ITensor
+    convertToStateOp(const ITensor & ten, int start, int end)
+    {
+      auto ret = swapPrime(ten,0,1,"Site");
+      for (int i = start; i < end; ++i)
+	{
+	  ret *= vecComb(i);
+	  ret *= basisChange(i);
+	  }
+      return noPrime(ret, "Site");
+    }
+
     
     ITensor
     op(std::string const& opname, int i, Args const& args = Args::global()) const
@@ -207,7 +249,7 @@ namespace itensor
       auto it = vecOps_.find(opname);
       return it != vecOps_.end() ?
 	(i == 1 ? it->second : it->second*delta(t_,vecInds_[i-1]))
-	: (sites_.op(opname,i,args)*vecComb(i))*swapPrime(basisChange(i),0,1);
+	: noPrime((sites_.op(opname,i,args)*vecComb(i))*conj(basisChange(i)));
     }
 
 
@@ -217,7 +259,7 @@ namespace itensor
       auto it = stateOps_.find(opname);
       return it != stateOps_.end() ?
 	(i == 1 ? it->second : it->second*delta(t_,vecInds_[i-1]))
-	: (sites_.op(opname,i,args)*vecComb(i))*basisChange(i);
+	: noPrime((swapPrime(sites_.op(opname,i,args),0,1)*vecComb(i))*basisChange(i));
     }
 
   };

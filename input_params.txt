@@ -1,7 +1,7 @@
 input
 {
 OutputDir = output
-OutputName = longrangeswappedtest
+OutputName = etest
 N = 20
 Jx = 0.5
 Jy = 0.5
@@ -15,12 +15,13 @@ hz = 0.1
 tStep = 1.0
 tTotal = 50.0
 nSweeps = 4
-PresRadius = 1
+PresRadius = 2
 Cutoff = 1e-16
-NextNearest = true
+NextNearest = false
 FirstSVDCutoff = 1e-16
 ThirdSVDCutoff = 1e-10
 SVDMethod = gesdd
+OnlyPreserveEnergyDensity = true
 AbsoluteCutoff = true
 AbsolutePresCutoff = true
 MaxDim = 64

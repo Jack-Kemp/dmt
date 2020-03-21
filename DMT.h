@@ -13,15 +13,23 @@ namespace itensor{
   class DMT
   {
     int presRadius_;
+    bool presAll_ = true;
     bool vectorized_ = false;
     bool cacheTrace_ = true;
     bool vectorBasis_;
     bool hermitianBasis_;
     Real ctrace_;
     bool hasLinks_ = false;
+    std::map<int, std::vector<ITensor> > presOps_{};
+    std::unique_ptr<DMTSiteSet> dmtSites_;
+    
     std::vector<ITensor> ctraceLeftOf_{};
     std::vector<ITensor> ctraceRightOf_{};
-    std::unique_ptr<DMTSiteSet> dmtSites_;
+
+    std::vector<ITensor> cQpres{};
+    std::vector<Index> cQpresInds{};
+    std::vector<int> cnPresOps{};
+    
 
     //With two indices rho_(i) should have site indices <Out> <In>'
     //in opposite convention to normal MPOs but to match MPS <Out>,
@@ -90,7 +98,106 @@ namespace itensor{
     
   public:
 
+
+    void addPresOperator(ITensor presOp, int support, bool convertToStateOp = false)
+    {
+      presAll_ = false;
+      if(support > presRadius_)
+	{
+	  Error("Support of preserved operator greater than preserved radius!");
+	}
+      if (convertToStateOp)
+	presOps_[support].push_back(dmtSites_->convertToStateOp(presOp, 1, support+1));
+      else
+	presOps_[support].push_back(presOp);
+    }
+
+    void
+    updateQpresCache()
+    {
+      if (presAll_)
+	{
+	  for (int radius=1; radius <= presRadius_; ++radius)
+	    {
+	      auto id = getId(1, radius+1);
+	      auto sinds = inds(id);
+	      auto [C,csiteInds] = combiner(dag(sinds));
+	      //Set up a dummy index so matrix QR can be used on vector
+	      Index dummyInd = hasQNs(csiteInds) ? dag(Index(qn(csiteInds,1),1)) : Index(1);
+	      ITensor dummyT = ITensor(dummyInd);
+	      dummyT.set(1,1.0);
+	      id *= dummyT;
+	      
+	      Args qrArgs = Args{"Complete", true};
+
+	      //QR the identity on pres sites to get basis with identity first el.
+	      auto [Qid, Rid] = qr(C*id, csiteInds, qrArgs);
+	      cQpres.push_back(Qid);
+	      cQpresInds.push_back(csiteInds);
+	    }
+	}
+      else
+	{
+	  for (int radius=1; radius <= presRadius_; ++radius)
+	    {
+	      std::vector<ITensor> radiusOps;
+	      auto id = getId(1, radius+1);
+	      auto sinds = inds(id);
+	      auto [C,csiteInds] = combiner(dag(sinds));
+	      radiusOps.push_back(C*id);
+	      for (int supp = 1; supp <= radius; supp++){
+		auto ops = presOps_.find(supp);
+		if (ops != presOps_.end())
+		  {
+		    for (int start = 1; start <= radius - supp + 1; ++start)
+		      {
+			auto suppInds = inds(getId(start, start + supp));
+			for (auto op : ops->second)
+			  {
+			    auto opInds = inds(op);
+			    for(int i = 0; i < supp; i++)
+			      if (opInds[i] != suppInds[i])
+				op *= delta(opInds[i], suppInds[i]);
+			    PrintData(op);
+			    PrintData((getId(1, start)*op*getId(start+supp, radius+1)));
+			    radiusOps.push_back(C*(getId(1, start)*op*getId(start+supp, radius+1)));
+			  }
+		      }
+		  }
+	      }
+	      
+	      int nPresOps = radiusOps.size();
+	      //Set up a column index
+	      Index colInd = hasQNs(csiteInds) ? dag(Index(qn(csiteInds,1),nPresOps)) : Index(nPresOps);
+	      ITensor presTotal(csiteInds, colInd);
+	      for (unsigned int i = 0; i < radiusOps.size(); i++)
+		for (const auto & indvals : iterInds(radiusOps[i]))
+		  presTotal.set(indvals[0].val, i+1, eltC(radiusOps[i],indvals));
+			      
+	      Args qrArgs = Args{"Complete", true};
+
+	      //QR pres ops on pres sites to get basis with identity first el.
+	      // and pres ops and following els.
+	      auto [Qp, Rp] = qr(presTotal, csiteInds, qrArgs);
+	      cQpres.push_back(Qp);
+	      cQpresInds.push_back(csiteInds);
+	      cnPresOps.push_back(nPresOps);
+	    }
+	}
+    }
+
+    ITensor
+    Qpres(const int & radius, const Index & csiteInds) const
+    {
+      return cQpres[radius-1]*delta(cQpresInds[radius-1], csiteInds);
+    }
     
+    int
+    presDim(const int & radius) const
+    {
+      return cnPresOps[radius-1];
+    }
+	
     void
     updateTraceCache()
     {
@@ -156,8 +263,8 @@ namespace itensor{
 
     ITensor
     getId(int siteStart, int siteEnd){
-      ITensor id = siteOp("Id", siteStart);
-      for (int i = siteStart+1; i<siteEnd; i++)
+      ITensor id = ITensor(1);
+      for (int i = siteStart; i<siteEnd; i++)
 	id *= siteOp("Id", i); 
       return id;
     }
@@ -360,25 +467,28 @@ namespace itensor{
       //Vectorise physical indices
       auto [CL,csiteIndsL] = combiner(dag(siteIndsL));
       auto [CR,csiteIndsR] = combiner(dag(siteIndsR));
-      const int sdimL = dim(csiteIndsL);
-      const int sdimR = dim(csiteIndsR);
+      int sdimL, sdimR;
 
+      if (presAll_)
+	{
+	  sdimL = dim(csiteIndsL);
+	  sdimR = dim(csiteIndsR);
+	}
+      else
+	{
+	  sdimL = presDim(presRadiusL);
+	  sdimR = presDim(presRadiusR);
+	}
+      
       //If the pres. dimension is greater than current, no trunc. needed.
       if(sdimL < dim(indDL) and sdimR < dim(indDR))
 	{
-	  //Set up a dummy index so matrix QR can be used on vector
-	  Index dummyInd = hasQNs(csiteIndsL) ? dag(Index(qn(csiteIndsL,1),1)) : Index(1);
-	  ITensor dummyT = ITensor(dummyInd);
-	  dummyT.set(1,1.0);
-
-	  auto idL = getId(leftmostPres, b+1)*dummyT;
-	  auto idR = getId(b+1, rightmostPres+1)*dummyT;
 
 	  Args qrArgs = Args{"Complete", true};
-
-	  //QR the identity on pres sites to get basis with identity first el.
-	  auto [QidL, RidL] = qr(CL*idL, csiteIndsL, qrArgs);
-	  auto [QidR, _unused2] = qr(CR*idR, csiteIndsR, qrArgs);
+	  
+	  //Get basis tranform to put preserve quantities in top left.
+	  auto QidL = Qpres(presRadiusL, csiteIndsL);
+	  auto QidR = Qpres(presRadiusR, csiteIndsR);
 
 	  //QR the rho left and right bases to find DMT trunc. basis.
 	  auto [QbasisL, RbasisL] = qr(QidL*(dag(CL)*basisL), indDL, qrArgs);
@@ -525,8 +635,11 @@ namespace itensor{
       //   rho_ *= 1/trace_();
       // 	}
       updateTraceCache();
+      updateQpresCache();
     }  
 
+    //Vectorize the MPO rho via the vectorization given in dmtSites_.
+    //Assumes the tensors in rho are stateOps (see DMTSiteSet.h).
     void
     vec()
     {
