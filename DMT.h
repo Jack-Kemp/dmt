@@ -8,20 +8,50 @@
 #include "ITensorUtilFunctions.h"
 
 
+//Class for performing DMT calculations.
+
+//Calculations can either be done on MPO, or 'vectorized' into an
+//MPS: they are equivalent. The Hermitian basis, which is real,
+//can only be used vectorized.
+
+//The main substance of the class is the custom truncation routine
+//DMT::svdBond, which truncates a bond while preserving given operators.
+
+//Conventions: pres prefix refers to preserved operators,
+//those that are preserved by DMT truncation.
+//'c' prefix refers to cached (precalculated) quantities.
+// _ after a variable is private.
+
+//StateOps have indices <Out> <In>' as MPO and <Out> as MPS.
+//SiteOps always have indices <Out>' <In>. (See DMTSiteSet).
+
 namespace itensor{
 
   class DMT
   {
-    int presRadius_;
-    bool presAll_ = true;
+
+    //The density matrix as a stateOp.
+    MPO rho_;
+
+    //The physical basis. Wraps a base itensor SiteSet, handling
+    //vectorization if necessary.
+    std::unique_ptr<DMTSiteSet> dmtSites_;
     bool vectorized_ = false;
-    bool cacheTrace_ = true;
     bool vectorBasis_;
     bool hermitianBasis_;
-    Real ctrace_;
-    bool hasLinks_ = false;
+
+    
+    //The number of sites preserved from a bond in a single direction.
+    int presRadius_;
+
+    //If presAll = False, preserve only operators in presOps_ [EXPERIMENTAL]
+    //[Only works if unit cell is one site (open b.c.s are fine [CHECK])]
+    bool presAll_ = true;
     std::map<int, std::vector<ITensor> > presOps_{};
-    std::unique_ptr<DMTSiteSet> dmtSites_;
+
+    //Cache variables for trace and preservation rotation matrices Q.
+    bool cacheTrace_ = true;
+    Real ctrace_;   
     
     std::vector<ITensor> ctraceLeftOf_{};
     std::vector<ITensor> ctraceRightOf_{};
@@ -31,11 +61,11 @@ namespace itensor{
     std::vector<int> cnPresOps{};
     
 
-    //With two indices rho_(i) should have site indices <Out> <In>'
-    //in opposite convention to normal MPOs but to match MPS <Out>,
-    //as rho_ more akin to a wavefuntion than an opeator.
-    MPO rho_;
+    //Internal use for initialisation; have we added link indices yet?
+    bool hasLinks_ = false;
     
+
+    //Trace out the sites left of (not including) site presL
     ITensor
     traceLeftOf_(int presL) const
     {
@@ -57,6 +87,7 @@ namespace itensor{
       return ITensor(1);
     }
 
+    //Trace out the sites left of (not including) site presR
     ITensor
     traceRightOf_(int presR) const
     {
@@ -95,23 +126,9 @@ namespace itensor{
 	  return eltC(ret).real();
 	}
     }
-    
-  public:
 
-
-    void addPresOperator(ITensor presOp, int support, bool convertToStateOp = false)
-    {
-      presAll_ = false;
-      if(support > presRadius_)
-	{
-	  Error("Support of preserved operator greater than preserved radius!");
-	}
-      if (convertToStateOp)
-	presOps_[support].push_back(dmtSites_->convertToStateOp(presOp, 1, support+1));
-      else
-	presOps_[support].push_back(presOp);
-    }
-
+    //Calculate and cache the preservation rotation operators Q.
+    //Called on initialisation.
     void
     updateQpresCache()
     {
@@ -177,7 +194,7 @@ namespace itensor{
 	      Args qrArgs = Args{"Complete", true};
 
 	      //QR pres ops on pres sites to get basis with identity first el.
-	      // and pres ops and following els.
+	      // and pres ops on following els.
 	      auto [Qp, Rp] = qr(presTotal, csiteInds, qrArgs);
 	      cQpres.push_back(Qp);
 	      cQpresInds.push_back(csiteInds);
@@ -185,26 +202,27 @@ namespace itensor{
 	    }
 	}
     }
-
-    ITensor
-    Qpres(const int & radius, const Index & csiteInds) const
-    {
-      return cQpres[radius-1]*delta(cQpresInds[radius-1], csiteInds);
-    }
     
-    int
-    presDim(const int & radius) const
-    {
-      return cnPresOps[radius-1];
-    }
-	
+  public:
+
+
+    //Add state operator presOp with support on lattice support to preserved operators.
     void
-    updateTraceCache()
+    addPresOperator(ITensor presOp, int support, bool convertToStateOp = false)
     {
-      updateTraceCacheLeft();
-      updateTraceCacheRight();
+      presAll_ = false;
+      if(support > presRadius_)
+	{
+	  Error("Support of preserved operator greater than preserved radius!");
+	}
+      if (convertToStateOp)
+	presOps_[support].push_back(dmtSites_->convertToStateOp(presOp, 1, support+1));
+      else
+	presOps_[support].push_back(presOp);
     }
 
+
+    //Fully update the cache for tracing out from the left.
     void
     updateTraceCacheLeft()
     {
@@ -216,6 +234,7 @@ namespace itensor{
       ctrace_ = eltC(ctraceLeftOf_[len()-1]*traceOf(len())).real(); 
     }
 
+    //Fully update the cache for tracing out from the right.
     void
     updateTraceCacheRight()
     {
@@ -227,6 +246,16 @@ namespace itensor{
     }
 
     void
+    updateTraceCache()
+    {
+      updateTraceCacheLeft();
+      updateTraceCacheRight();
+    }
+    
+
+    //Update the appropriate trace cache for a one-site update at site
+    //given a direction.
+    void
     updateTraceCacheOneSite(int site, Direction dir)
     {
       if(dir == Fromleft)
@@ -234,6 +263,8 @@ namespace itensor{
       else
 	ctraceRightOf_[site-1] = traceOf(site+1)*ctraceRightOf_[site];
     }
+
+    //Getter-setter Methods. Ref methods return a modifiable reference.
 
     ITensor
     traceLeftOf(int presL) const
@@ -252,7 +283,7 @@ namespace itensor{
       return cacheTrace_ ? ctrace_ : trace_(); 
     }
 
-     ITensor
+    ITensor
      traceOf(int site_i) const{
       if (vectorized_)
 	return op(*dmtSites_,"Id", site_i)*rho_(site_i);
@@ -260,7 +291,20 @@ namespace itensor{
 	return rho_(site_i) * delta(dag(siteInds(rho_, site_i)));
     }
 
+    ITensor
+    Qpres(const int & radius, const Index & csiteInds) const
+    {
+      return cQpres[radius-1]*delta(cQpresInds[radius-1], csiteInds);
+    }
+    
+    //Number of preserved operators on radius number of sites.
+    int
+    presDim(const int & radius) const
+    {
+      return cnPresOps[radius-1];
+    }
 
+    //Get the identity matrix as siteOp from [siteStart, siteEnd).
     ITensor
     getId(int siteStart, int siteEnd){
       ITensor id = ITensor(1);
@@ -305,6 +349,13 @@ namespace itensor{
 
     ITensor & rhoRef(const int & i){ return rho_.ref(i); }
 
+    int
+    presRadius() const { return presRadius_; }
+
+    //Given a two-site siteOp hterm starting at site b, calculate the corresponding gate
+    //for DMT update time tDelta given DMT basis.
+
+    //If SwapOutputs = true, constructs a swap gate after hterm gate.
     BondGate
     calcGate (ITensor hterm, double tDelta, int leftSite, const Args& args = Args::global()) const
     {
@@ -315,15 +366,24 @@ namespace itensor{
       
       if (vectorized_)
 	{
+	  //If it is vectorized, we must kronecker the two Hamiltonian indices
+	  //with the identity to construct the gate to perform time evolution.
+
+	  //If (x) is kronecker product, we use vec(ABC) = C^T (x) A vec(B) and
+	  //dp/dt = - i [H,p] = -i(HpI + IpH)
+
 	  if (verbose) printfln("Vectorizing gate.");
 	  auto idterm  = s.bareOp("Id",b)*s.bareOp("Id",b+1);
 	  auto siteInds = IndexSet(s.siteInd(b), s.siteInd(b+1));
 	  auto vecInds = IndexSet(s.vecInd(b), s.vecInd(b+1));
 	  auto hsupterm = kron(idterm, hterm, siteInds, vecInds)
 	    - kron(swapPrime(hterm,0,1), idterm, siteInds, vecInds);
+
+	  //Change basis via similarity transform.
 	  auto Udag = s.basisChange(b)*s.basisChange(b+1);
 	  hsupterm = mapPrime(swapPrime(Udag,0,1),0,3) *(hsupterm* mapPrime(conj(Udag),1,2));
 	  hsupterm.replaceTags("2","0").replaceTags("3","1");
+	  
 	  auto gate = vecBondGate(sites(),
 				   kron(idterm, idterm, siteInds, vecInds),
 				   b,b+1,BondGate::tReal,tDelta,hsupterm);
@@ -355,6 +415,7 @@ namespace itensor{
 	}
       else
 	{
+	  //If not vectorised, we evolve via p(t) = e^(-iHt) p e^(iHt)
 	  auto gp = BondGate(sites(),b,b+1,BondGate::tReal,tDelta,hterm);
 	  auto gm = BondGate(sites(),b,b+1,BondGate::tReal,-tDelta,hterm);
 
@@ -378,12 +439,32 @@ namespace itensor{
 			     mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3));
 	}
     }
-    
-    
-    int
-    presRadius() const { return presRadius_; }
 
+
+    //The DMT truncation algorithm. Truncates a bond from b in direction dir,
+    //preserving the appropriate operators.
+
+    //Contains three SVDs with their own possible options:
+
+    //---A truncationless "first" SVD to get singular values.
+    //
+    //---The main, truncating SVD in a basis defined by the preservation
+    //---rotation operators Qpres.
+    //
+    //---A "third" SVD to bring MPO to canonical form after basis change back
+    //---to physical basis, with minimal, but non-zero, truncation.
+
+    //Ideas for good names for these are appreciated!
+
+
+    //Options:
     
+    //Cutoff refers to truncation cutoff (total of truncated s.v.s).
+
+    //Absolute cutoff refers to discarding any s.v. below that value.
+
+    //MaxDim is max bond dimension.
+  
     template <typename BigMatrixT>
     Spectrum
     svdBond(int b, 
@@ -397,12 +478,16 @@ namespace itensor{
       //auto noise = args.getReal("Noise",0.);
       //auto cutoff = args.getReal("Cutoff",MIN_CUT);
 
+
+      //Use SVD or lower accuracy denmatdecomp method.
       auto useSVD = args.getBool("UseSVD",false);
       auto useSVDThird =  args.getBool("UseSVDThird",false);
+
+      //Max Bond dimension
       int maxDim =  args.getInt("MaxDim", MAX_DIM);
       
       
-      //SVD values for "non-truncating" first and third SVDs
+      //Repack the SVD values for "non-truncating" first and third SVDs
       //The SVD value for the truncating SVD are passed through args.
       auto absolutePresCutoff = args.getBool("AbsolutePresCutoff", true);  
       auto firstCutoff = args.getReal("FirstSVDCutoff",1e-16);
@@ -486,7 +571,7 @@ namespace itensor{
 
 	  Args qrArgs = Args{"Complete", true};
 	  
-	  //Get basis tranform to put preserve quantities in top left.
+	  //Get basis tranform to put preserved quantities in top left.
 	  auto QidL = Qpres(presRadiusL, csiteIndsL);
 	  auto QidR = Qpres(presRadiusR, csiteIndsR);
 
@@ -626,20 +711,41 @@ namespace itensor{
       return res;
     }
 
-    void
-    finishConstruction(){
-      if(not hasLinks_)
-	putMPOLinks(rho_);
-      // if (args.getBool("normalize"))
-      // 	{
-      //   rho_ *= 1/trace_();
-      // 	}
-      updateTraceCache();
-      updateQpresCache();
-    }  
+    //Overload for svdBond without noise matrix.
+     void
+    svdBond(int b, 
+            ITensor const& AA, 
+            Direction dir,
+            Args args = Args::global())
+    {
+      this->svdBond(b,AA,dir, LocalOp(), args);
+    }
+
+
+    //Truncate bonds so that all bonds around i are in truncated form.
+      MPO& 
+    position(int i, Args args = Args::global()){
+      while(rho_.leftLim() < i-1)
+	{
+	  if(rho_.leftLim() < 0) rho_.leftLim(0);
+	  //setBond(rho_.leftLim()+1); Again, only fails for write to disk, I think
+	  auto WF = rho_(rho_.leftLim()+1) * rho_(rho_.leftLim()+2);
+	  auto original_link_tags = tags(linkIndex(rho_,rho_.leftLim()+1));
+	  svdBond(rho_.leftLim()+1,WF,Fromleft,{args,"LeftTags=",original_link_tags});
+	}
+      while(rho_.rightLim() > i+1)
+      {
+	if(rho_.rightLim() > len()+1) rho_.rightLim(len()+1);
+	//setBond(rho_.rightLim()-2);
+	auto WF = rho_(rho_.rightLim()-2) * rho_(rho_.rightLim()-1);
+	auto original_link_tags = tags(linkIndex(rho_,rho_.rightLim()-2));
+	svdBond(rho_.rightLim()-2,WF,Fromright,{args,"RightTags=",original_link_tags});
+      }
+      return rho_;
+    }
 
     //Vectorize the MPO rho via the vectorization given in dmtSites_.
-    //Assumes the tensors in rho are stateOps (see DMTSiteSet.h).
+    //Assumes the tensors in rho are stateOps.
     void
     vec()
     {
@@ -664,6 +770,7 @@ namespace itensor{
 	}
     }
 
+    //Unvectorize, inverse of DMT::vec()
     void
     unvec()
     {
@@ -674,6 +781,8 @@ namespace itensor{
 	rho_.ref(i) *= dmtSites_->vecComb(i);
     }
 
+
+    //Initialise density matrix as projector onto pure state |psi>
      void
     fromPureState(const MPS& psi){
        vectorized_ = false;
@@ -682,42 +791,26 @@ namespace itensor{
       if(vectorBasis_)
 	this->vec();
      }
-
     
-    void
-    svdBond(int b, 
-            ITensor const& AA, 
-            Direction dir,
-            Args args = Args::global())
-    {
-      this->svdBond(b,AA,dir, LocalOp(), args);
-    }
+    //Called after initialiastion to set caches.
+        void
+    finishConstruction(){
+      if(not hasLinks_)
+	putMPOLinks(rho_);
+      // if (args.getBool("normalize"))
+      // 	{
+      //   rho_ *= 1/trace_();
+      // 	}
+      updateTraceCache();
+      updateQpresCache();
+    }  
 
 
-    MPO& 
-    position(int i, Args args = Args::global()){
-      while(rho_.leftLim() < i-1)
-	{
-	  if(rho_.leftLim() < 0) rho_.leftLim(0);
-	  //setBond(rho_.leftLim()+1); Again, only fails for write to disk, I think
-	  auto WF = rho_(rho_.leftLim()+1) * rho_(rho_.leftLim()+2);
-	  auto original_link_tags = tags(linkIndex(rho_,rho_.leftLim()+1));
-	  svdBond(rho_.leftLim()+1,WF,Fromleft,{args,"LeftTags=",original_link_tags});
-	}
-      while(rho_.rightLim() > i+1)
-      {
-	if(rho_.rightLim() > len()+1) rho_.rightLim(len()+1);
-	//setBond(rho_.rightLim()-2);
-	auto WF = rho_(rho_.rightLim()-2) * rho_(rho_.rightLim()-1);
-	auto original_link_tags = tags(linkIndex(rho_,rho_.rightLim()-2));
-	svdBond(rho_.rightLim()-2,WF,Fromright,{args,"RightTags=",original_link_tags});
-      }
-      return rho_;
-    }
-
+    //The constructor requires underlying physical basis sites and takes
+    //options on whether to vectorize. vecBasis is a list of operator names
+    //needed to form a basis (see DMTSiteSet), for not vectorized call overload
+    //below.
     
-
-
     DMT(SiteSet sites, std::vector<const char*> vecBasis, Args const& args = Args::global()) {
       hermitianBasis_ = args.getBool("HermitianBasis", false);
       vectorBasis_ = hermitianBasis_ or args.getBool("Vectorize", false);
@@ -739,6 +832,8 @@ namespace itensor{
       }
       
     }
+
+    DMT(SiteSet sites, Args const& args = Args::global()) : DMT(sites, {" "}, args) {}
 
     
   };

@@ -2,19 +2,31 @@
 #define __ITENSOR_TROTTERCONSTRUCTOR_H
 
 #include<itensor/all.h>
-#include<ITensorUtilFunctions.h>
 #include<limits>
 #include<map>
 #include<string>
+
+#include"ITensorUtilFunctions.h"
 
 
 using Real = double;
 namespace itensor{
 
-//Optional args: bool repeat, int start, int end.
-//repeat=true or single value: couplings repeat between start and end inclusive.
-//Otherwise provide a vector of length either of the system size or (end-start+1),
-//for the value on each site between start and end, or the entire system.
+
+
+  //Class CouplingValues to store information above the couplings.
+  //Can either by single value or full list or list to be periodically
+  //repeated. Helper for TrotterConstructor below to store and
+  //construct Hamiltonians.
+
+  //bool Repeat, int Start, int End.
+
+  //If Repeat=true or single value is given: couplings repeat between site numbered by start
+  //and site numbered by end inclusive.
+  
+  //Otherwise provide a vector of length either of the system size or (end-start+1),
+  //for the value on each site between start and end, or the entire system.
+  
 class CouplingValues {
   using VecReal= std::vector<Real>;
   VecReal vals_;
@@ -67,6 +79,18 @@ BondGate swapInputOutput(const BondGate & gate, const SiteSet & sites)
     return BondGate(sites, gate.i1(), gate.i2(), swapPrime(gate.gate(),0,1));
 }
 
+
+
+  //Class to store Coupling Values with lattice bonds, and construct
+  //appropriate two site gates.
+
+  //Use addSingleSite, addNearestNeighbour, addLongRange to add couplings
+  //the Hamiltonian.
+
+  //Then use construct2ndOrderSweep to get a list of gates which when applied
+  //sweep once back and forth across the chain for a 2nd order Trotter decomposition
+  // of the Hamiltonian.
+  
 class TrotterConstructor {
   using MapCouplings = std::map<std::vector<std::string>, CouplingValues>;
   MapCouplings nearestNeighbour_;
@@ -75,6 +99,11 @@ class TrotterConstructor {
   int maxRange_ = 0;
 
 
+
+
+  //Construct second order DMRG-like sweep of two-site gates
+  //back and forth once. Results in 2nd order trotter decomposition.
+  //Assumes open system and deals with the edge appropriately. 
   template<typename CalcGateClass>
   void 
   construct2ndOrderSweepNearestNeighbour_(std::vector<BondGate>& gates,
@@ -120,6 +149,8 @@ class TrotterConstructor {
 }
 
 
+  //Constructs 2nd order sweep of two sites gates for arbitrary range interactions using swap gates.
+  
   template<typename CalcGateClass>
   void 
   construct2ndOrderSweepLongRange_(std::vector<BondGate>& gates,
@@ -144,6 +175,8 @@ class TrotterConstructor {
 	  else
 	    range = 1;
 	}
+
+	//First deal with nearest neighbour and single-site terms.
 	auto hterm = ITensor(op(sites,"Id",1).inds());
 	for (const auto& [opnames, cvals] : nearestNeighbour_){
 	  hterm += cvals(b)*op(sites, opnames[0], b)*op(sites, opnames[1], b+1);
@@ -168,20 +201,25 @@ class TrotterConstructor {
 	    if (verbose) printfln((opnames[0] + " at %d: %f").c_str(), b+1,  cvals(b+1));
 	  }
 	}
-
+	
+	//If we are next to the right edge, we are done, otherwise, long-range terms.
 	if (range == 1)
 	  {
 	    args.add("SwapOutputs", false);
 	    gates.push_back(calc.calcGate(hterm, tSweep/2, b, args)); //Notice over 2!!!!
 	  }
-      
+
+	//For each seperation, construct the two-site gate, then swap again after
+	//so we are ready to deal with the next seperation. Then apply the gates in
+	//reverse order, swapping back. As each gate is applied twice, deltat =  tsweep/4.
+	//Notice for there is no swapping after the longest-range gate which is only applied once.
 	else
 	  {
+	    //Construct a swap gate after nearest neighbour terms.
 	    int newgates = 0;
 	    args.add("SwapOutputs", true);
-	    gates.push_back(calc.calcGate(hterm, tSweep/4, b, args)); //Notice over 2!!!!
-	    newgates++;
-
+	    gates.push_back(calc.calcGate(hterm, tSweep/4, b, args)); //Notice over 2 twice!!!!
+	    newgates++;   
 	    for (int sep = 2; sep < range; sep++){
 	      auto couplings = longRange_.find(sep);
 	      auto hterm = ITensor(op(sites,"Id",1).inds());
@@ -279,7 +317,8 @@ std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
 
 }
 
-  
+  //EXPERIMENTAL Find the sum of the terms of the Hamiltonian soley
+  //supported within site 1 to site 1 + maxRange.
   ITensor localEnergyDensity(SiteSet sites){
     int maxSupp = maxRange_ + 1;
     auto hterm = ITensor(op(sites,"Id",1).inds());

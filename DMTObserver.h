@@ -8,6 +8,9 @@
 
 namespace itensor{
 
+  //A functor called during DMT time evolution for real time control
+  //of the algorithm, e.g. for adaptive stopping.
+
 class DMTObserver
     {
       std::function<void(DMT & dmt, Args const& args)> measure;

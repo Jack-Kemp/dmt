@@ -7,55 +7,6 @@
 
 namespace itensor {
 
-
-  BondGate MPOBondGate(SiteSet const& sites, 
-		       int i1, 
-		       int i2,
-		       BondGate::Type type,
-		       Real tau,
-		       ITensor bondH)
-  {
-    if(i1 > i2)
-      std::swap(i1,i2);
-
-    if(!(type == BondGate::tReal || type == BondGate::tImag))
-      {
-        Error("When providing bondH, type must be tReal or tImag");
-      }
-    bondH *= -tau;
-    ITensor sunit = sites.op("Id",i1)*sites.op("Id",i2);
-    ITensor unit = mapPrime(sunit,1,2) * mapPrime(sunit,0,3);
-    
-    if(type == BondGate::tReal)
-      {
-        bondH *= Complex_i;
-      }
-    auto term = bondH;
-    bondH.replaceTags("2","4");
-    bondH.replaceTags("0","2");
-    bondH.replaceTags("3","5");
-    bondH.replaceTags("1","3");
-    ITensor gate;
-
-    // exp(x) = 1 + x +  x^2/2! + x^3/3! ..
-    // = 1 + x * (1 + x/2 *(1 + x/3 * (...
-    // ~ ((x/3 + 1) * x/2 + 1) * x + 1
-    for(int ord = 100; ord >= 1; --ord)
-      {
-        term /= ord;
-        gate = unit + term;
-        term = gate * bondH;
-        term.replaceTags("5","3");
-	term.replaceTags("4","2");
-      }
-    return BondGate(sites, i1,i2,gate);
-  }
-
-
-
-  
-
-
   //
   // Evolves an MPO in real or imaginary time by an amount ttotal in steps
   // of tstep using the list of bond gates provided.

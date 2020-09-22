@@ -14,10 +14,10 @@ namespace itensor
   //underlying SiteSet in base and derived classes.
   
   //op = bareOp for the base class, and should represent on observable or
-  //transformation of a state.
+  //transformation of a state. Has indices <Out>' <In>
   
-  //stateOp represents the operator as a density matrix,
-  //defined such that op*stateOp = Tr(op stateOp)
+  //stateOp represents the operator as a density matrix, with indices
+  //<Out> <In>' defined such that op*stateOp = Tr(op stateOp).
   
   class DMTSiteSet
   {
@@ -88,7 +88,8 @@ namespace itensor
   
  
   //Vectorized SiteSet. Supply vecOpNames, a list of names of the bareOps
-  //of SiteSet that form a basis for the operator space.
+  //of SiteSet that form a basis for the operator space. These operators
+  //are cached as vectors; other operators are vectorized on the fly.
   
   //Vectorizes the index of SiteSet with {vecComb, vecInd} = combiner(ind, prime(ind)).
   //This means that unprimed indices run faster than primed.
@@ -103,7 +104,7 @@ namespace itensor
   //op = bareOp*vecComb*conj(basisChange)
 
   //These definitions keep op*stateOp = tr(op stateOp) as required.
-  //Can be passed in as Matrix (untested!).
+  //Can be passed in as Matrix (EXPERIMENTAL).
 
   //HermitianBasis: basisChange is chosen such that the stateOps are
   //of the form norm_1*(1,0,0..), norm_2*(0,1,0...), norm_3*(0,0,1...)
@@ -256,6 +257,7 @@ namespace itensor
     ITensor
     stateOp(std::string const& opname, int i, Args const& args = Args::global()) const
     {
+      //Either find the Op in list of basis names or construct manually from bare Op.
       auto it = stateOps_.find(opname);
       return it != stateOps_.end() ?
 	(i == 1 ? it->second : it->second*delta(t_,vecInds_[i-1]))
@@ -264,7 +266,7 @@ namespace itensor
 
   };
 
-
+  //Global namespace function overloads for DMTSiteSet
     ITensor inline
 op(DMTSiteSet const& sites,
    std::string const& opname,
