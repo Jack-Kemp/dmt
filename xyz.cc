@@ -18,6 +18,9 @@ using namespace itensor;
 using std::vector;
 using namespace std::chrono;
 
+typedef std::vector<Real> VecReal;
+typedef std::vector<VecReal> MatrixReal;
+
 int main(int argc, char* argv[])
 {
 
@@ -32,13 +35,13 @@ int main(int argc, char* argv[])
   }
   auto input = InputGroup(inputName,"input");
 
-  const int N = input.getInt"N");
+  const int N = input.getInt("N");
   const int centre = N %2 == 0 ?  N/2 : (N+1)/2;
   const Real tStep = input.getReal("tStep");
-  const Real tSweep = tStep/input.getInt"nSweeps");
-  const bool vectorize = paramsBool.at("Vectorize");
-  const bool hermitianBasis = paramsBool.at("HermitianBasis");
-  const bool conserveQNs = paramsBool.at("ConserveQNs");
+const Real tSweep = tStep/input.getInt("nSweeps");
+  const bool vectorize = input.getYesNo("Vectorize");
+  const bool hermitianBasis = input.getYesNo("HermitianBasis");
+  const bool conserveQNs = input.getYesNo("ConserveQNs");
 
   Real hx = input.getReal("hx");
   Real hy = input.getReal("hy");
@@ -67,7 +70,7 @@ int main(int argc, char* argv[])
   auto sites = SpinHalf(N, {"ConserveQNs=", conserveQNs});
   auto vectorBasis = {"Id", "Sx", "Sy", "Sz"};
   
-  auto dmt = DMT(sites, vectorBasis, {"PresRadius", input.getInt"PresRadius"),
+  auto dmt = DMT(sites, vectorBasis, {"PresRadius", input.getInt("PresRadius"),
 			       "HermitianBasis", hermitianBasis,
 			       "Vectorize", vectorize});
   
@@ -88,13 +91,13 @@ int main(int argc, char* argv[])
       for(int j = 1; j <= N; ++j)
 	{
 	  //Alternating
-	  //dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(2*(j %2)-1)*dmt.stateOp("Sz",j);
+	  dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(2*(j %2)-1)*dmt.stateOp("Sz",j);
 
 	  //Unpolarized except for centre spin
-	  dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(j == centre)*dmt.stateOp("Sz",j);
+	  //dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(j == centre)*dmt.stateOp("Sz",j);
 
 	  //Single Domain Wall
-	  dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*( 2*(j > centre) -1 )*dmt.stateOp("Sz",j);
+	  //dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*( 2*(j > centre) -1 )*dmt.stateOp("Sz",j);
 	}
     }
 			   
@@ -141,32 +144,32 @@ int main(int argc, char* argv[])
 
 
 
-std::map<std::string, std::vector<std::vector<Real>>> data2D;
-std::map<std::string, std::vector<std::vector<Real>>> data;
+  std::map<std::string, MatrixReal> data2D;
+  std::map<std::string, VecReal> data;
 
   if(input.getYesNo("WriteMagz"))
-     data2D.emplace("Sz", {{}});
+     data2D.emplace("Sz", MatrixReal());
   if(input.getYesNo("WriteMagx"))
-     data2D.emplace("Sx", {{}});
+     data2D.emplace("Sx", MatrixReal());
   if(input.getYesNo("WriteMagy"))
-     data2D.emplace("Sy", {{}});
+     data2D.emplace("Sy", MatrixReal());
   if(input.getYesNo("WriteCorrzz"))
-    data2D.emplace("SzSzNN", {{}});
+    data2D.emplace("SzSzNN", MatrixReal());
   if(input.getYesNo("WriteCorrxx"))
-    data2D.emplace("SxSxNN", {{}});
+    data2D.emplace("SxSxNN", MatrixReal());
   if(input.getYesNo("WriteCorryy"))
-    data2D.emplace("SySyNN", {{}});
+    data2D.emplace("SySyNN", MatrixReal());
   if(input.getYesNo("WriteS2"))
-    data.emplace("S2", {});
+    data.emplace("S2", VecReal());
   if(input.getYesNo("WriteMaxDim"))
-    data.emplace("MaxDim", {});
+    data.emplace("MaxDim", VecReal());
   if(input.getYesNo("WriteTrace"))
-    data.emplace("Trace", {});
+    data.emplace("Trace",VecReal());
 
 
   auto measure = [&](DMT& dmt, Args const & args){
 		   for (auto & [key, value] : data2D)
-		     value.push_back(std::vector<Real>);
+		     value.push_back(VecReal());
 		   for(int i = 1; i <= N; i++)
 		     {
 		       if(input.getYesNo("WriteMagz"))
@@ -190,6 +193,7 @@ std::map<std::string, std::vector<std::vector<Real>>> data;
 		     data["Trace"].push_back(dmt.trace()); 
 		 };
 
+  
   DMTObserver obs(measure);
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
@@ -202,11 +206,11 @@ std::map<std::string, std::vector<std::vector<Real>>> data;
 	     "AbsoluteCutoff", input.getYesNo("AbsoluteCutoff"),
 	     "AbsolutePresCutoff", input.getYesNo("AbsolutePresCutoff"),
 	     "Verbose", input.getYesNo("Verbose"),
-	     "MaxDim", input.getInt"MaxDim"),
+	     "MaxDim", input.getInt("MaxDim"),
 	     "UseSVD", input.getYesNo("UseSVD"),
 	     "UseSVDThird", input.getYesNo("UseSVDThird"),
 	     "DoNormalize", input.getYesNo("Normalize"),
-	     "nSweeps", input.getInt"nSweeps"),
+	     "nSweeps", input.getInt("nSweeps"),
 	     "SVDMethod", input.getString("SVDMethod")});
 
   high_resolution_clock::time_point t2 = high_resolution_clock::now();

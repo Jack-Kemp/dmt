@@ -17,38 +17,41 @@ std::string to_string_sstream(const A& num){
 }
 
 
+//Writes square data tabulated space delimited to a file, with column headers as a comment on top
+//and the argument file as comments at the end.
 template<class X, class Y>
-void writeDataToFile (std::string outName, const X& data, const Y& data2D, std::string argsFileName){
+void writeDataToFile (std::string outName, const X& data, const Y& data2D, std::string argFileName){
   std::ifstream argFile;
   argFile.open(argFileName.c_str());
   std::ofstream outfile;
-  outfile.open(iName.c_str(), std::ios::trunc);
+  outfile.open(outName.c_str(), std::ios::trunc);
   if(outfile and argFile){
     outfile << '#';
     for (auto & [key, value] : data2D)
-      for(int i = 0; i < value.size() < i++)
+      for(uint i = 0; i < value[0].size(); i++)
 	outfile << key +  '_' + to_string_sstream(i) + ' ';
     for (auto & [key, value] : data)
       outfile << key + ' ';
     outfile << '\n';
-    std::string str; 
-    while (std::getline(argfile, str))
-      {
-	outfile << '#' + str + '\n';
-      }
-
     uint size = 0;
     if(not data.empty())
       size = data.begin()->second.size();
     else if (not data2D.empty())
-      size = data2D.begin()->second[0].size();
+      size = data2D.begin()->second.size();
     for (uint i = 0; i<size; i++){
       for (auto & [key, value] : data2D)
-	for(int j = 0; i < value.size() < i++)
-	  outfile << value[j][i] << " ";
+	for(uint j = 0; j < value[0].size(); j++)
+	  outfile << value[i][j] << " ";
       for(auto & [key, value] : data)
 	outfile << value[i] << ' ';
+      outfile << '\n';
     }
+    outfile <<'\n';
+    std::string str; 
+    while (std::getline(argFile, str))
+      {
+	outfile << '#' + str + '\n';
+      }
     outfile.flush();
     outfile.close();
   }

@@ -1,38 +1,33 @@
 input
 {
-OutputDir = nnhoutput
-OutputName = nnhpedentest
-N = 20
+OutputDir = reformattest
+OutputName = rt2
+Verbose = true
+
+N = 3
 Jx = 1.0
 Jy = 1.0
 Jz = 1.0
+NextNearest = false
 J2x = 0.0
 J2y = 0.0
 J2z = 0.6
 hx = 0.0
 hy = 0.0
 hz = 0.0
+
 tStep = 1.0
-tTotal = 50.0
+tTotal = 10.0
 nSweeps = 4
-PresRadius = 3
+PresRadius = 1
+
+MaxDim = 64
 Cutoff = 1e-16
-NextNearest = true
 FirstSVDCutoff = 1e-16
 ThirdSVDCutoff = 1e-10
-SVDMethod = gesdd
-OnlyPreserveEnergyDensity = true
 AbsoluteCutoff = true
 AbsolutePresCutoff = true
-MaxDim = 64
-Vectorize = true
-HermitianBasis = true
-FromPureState = false
-ConserveQNs = false
-Normalize = true
-UseSVD = true
-UseSVDThird = true
-Verbose = true
+
 WriteMagz = true
 WriteMagx = true
 WriteMagy = true
@@ -41,5 +36,16 @@ WriteCorrxx = true
 WriteCorryy = true
 WriteS2 = true
 WriteMaxDim = true
-WriteTrace = false
+WriteTrace = true
+
+SVDMethod = gesdd
+UseSVD = true
+UseSVDThird = true
+
+Vectorize = true
+HermitianBasis = true
+OnlyPreserveEnergyDensity = false
+FromPureState = false
+ConserveQNs = false
+Normalize = true
 }
