@@ -9,7 +9,6 @@
 #include<chrono>
 #include<functional>
 #include<filesystem>
-#include"HermitianSpinHalf.h"
 #include"TrotterConstructor.h"
 
 
