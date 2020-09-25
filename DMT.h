@@ -8,6 +8,7 @@
 #include "ITensorUtilFunctions.h"
 
 
+
 //Class for performing DMT calculations.
 
 //Calculations can either be done on MPO, or 'vectorized' into an
@@ -811,7 +812,7 @@ namespace itensor{
     //needed to form a basis (see DMTSiteSet), for not vectorized call overload
     //below.
     
-    DMT(SiteSet sites, std::vector<const char*> vecBasis, Args  args = Args::global()) {
+    DMT(SiteSet sites, std::vector<const char*> vecBasis, Args const & args = Args::global()) {
       hermitianBasis_ = args.getBool("HermitianBasis", false);
       vectorBasis_ = hermitianBasis_ or args.getBool("Vectorize", false);
       presRadius_ = args.getInt("PresRadius", 1);

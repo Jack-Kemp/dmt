@@ -1,6 +1,6 @@
 #if 1
-#include "calculateObservables.h"
 #include "inputOutputUtilities.h"
+#include "calculateObservables.h"
 #include "DMT.h"
 #include "DMTObserver.h"
 #include "gateTevol.h"
@@ -10,6 +10,7 @@
 #include<functional>
 #include<filesystem>
 #include"TrotterConstructor.h"
+#include "ArgInput.h"
 
 
 
@@ -32,15 +33,16 @@ int main(int argc, char* argv[])
     printfln("Using default params.");
     inputName = "input_params.txt";
   }
+  
   auto input = InputGroup(inputName,"input");
+  auto args = readInMandatoryArgs(input);
 
   const int N = input.getInt("N");
   const int centre = N %2 == 0 ?  N/2 : (N+1)/2;
+  
   const Real tStep = input.getReal("tStep");
-const Real tSweep = tStep/input.getInt("nSweeps");
-  const bool vectorize = input.getYesNo("Vectorize");
-  const bool hermitianBasis = input.getYesNo("HermitianBasis");
-  const bool conserveQNs = input.getYesNo("ConserveQNs");
+  const Real tSweep = tStep/input.getInt("nSweeps");
+  const Real tTotal = input.getReal("tTotal");
 
   Real hx = input.getReal("hx");
   Real hy = input.getReal("hy");
@@ -52,6 +54,8 @@ const Real tSweep = tStep/input.getInt("nSweeps");
   Real J2y = input.getReal("J2y");
   Real J2z = input.getReal("J2z");
   Real delta = 0.5*Jx;
+
+  const bool conserveQNs = input.getYesNo("ConserveQNs");
   
   auto outputDir = input.getString("OutputDir"); 
   auto outputName = input.getString("OutputName");
@@ -69,9 +73,7 @@ const Real tSweep = tStep/input.getInt("nSweeps");
   auto sites = SpinHalf(N, {"ConserveQNs=", conserveQNs});
   auto vectorBasis = {"Id", "Sx", "Sy", "Sz"};
   
-  auto dmt = DMT(sites, vectorBasis, {"PresRadius", input.getInt("PresRadius"),
-			       "HermitianBasis", hermitianBasis,
-			       "Vectorize", vectorize});
+  auto dmt = DMT(sites, vectorBasis, args);
   
   //From projector of wavefunction
   if(input.getYesNo("FromPureState"))
@@ -141,8 +143,6 @@ const Real tSweep = tStep/input.getInt("nSweeps");
 
   //Set up measurements-----------------------------------------------
 
-
-
   std::map<std::string, MatrixReal> data2D;
   std::map<std::string, VecReal> data;
 
@@ -198,19 +198,7 @@ const Real tSweep = tStep/input.getInt("nSweeps");
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   
   //Time evolve-------------------------------------------------------
-  gateTEvol(dmtgates,input.getReal("tTotal"),tStep,dmt, obs,
-	    {"Cutoff",input.getReal("Cutoff"),
-	     "FirstSVDCutoff", input.getReal("FirstSVDCutoff"),
-	     "ThirdSVDCutoff", input.getReal("ThirdSVDCutoff"),
-	     "AbsoluteCutoff", input.getYesNo("AbsoluteCutoff"),
-	     "AbsolutePresCutoff", input.getYesNo("AbsolutePresCutoff"),
-	     "Verbose", input.getYesNo("Verbose"),
-	     "MaxDim", input.getInt("MaxDim"),
-	     "UseSVD", input.getYesNo("UseSVD"),
-	     "UseSVDThird", input.getYesNo("UseSVDThird"),
-	     "DoNormalize", input.getYesNo("Normalize"),
-	     "nSweeps", input.getInt("nSweeps"),
-	     "SVDMethod", input.getString("SVDMethod")});
+  gateTEvol(dmtgates, tTotal, tStep, dmt, obs, args);
 
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
 
@@ -229,22 +217,7 @@ const Real tSweep = tStep/input.getInt("nSweeps");
   //Write results-----------------------------------------------------
   std::filesystem::create_directory(outputDir);
 
-writeDataToFile(label, data, data2D, inputName);
-
-
-   
-  // //Some tests
-  // if (vectorized)
-  //   dmt.unvec();
-  // //auto overlap = innerC(psi,psi0);
-  // //Print(std::norm(overlap));
-  // //Print(traceC(rho,swapPrime(projector(psi0),0,1)));
-  // //auto initialE = innerC(psi0, H, psi0);
-  // //Print(initialE);
-  // //auto E = innerC(psi, H, psi);
-  // //Print(E);
-  // auto Erho = traceC(rho, H);
-  // Print(Erho);
+  writeDataToFile(label, data, data2D, inputName);
 
   return 0;
 }

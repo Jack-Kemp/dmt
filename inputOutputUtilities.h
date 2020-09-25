@@ -1,6 +1,7 @@
 #ifndef INPUT_OUTPUT_UTILITIES_H
 #define INPUT_OUTPUT_UTILITIES_H
 
+
 #include<iostream>
 #include<fstream>
 #include<sstream>
@@ -15,7 +16,6 @@ std::string to_string_sstream(const A& num){
   streamObj << num;
   return streamObj.str();
 }
-
 
 //Writes square data tabulated space delimited to a file, with column headers as a comment on top
 //and the argument file as comments at the end.

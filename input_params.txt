@@ -47,5 +47,5 @@ HermitianBasis = true
 OnlyPreserveEnergyDensity = false
 FromPureState = false
 ConserveQNs = false
-Normalize = true
+DoNormalize = true
 }
