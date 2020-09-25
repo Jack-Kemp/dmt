@@ -1,0 +1,23 @@
+input
+{
+OutputDir = out
+OutputName = xyz_example
+Verbose = true
+
+N = 3
+Jx = 1.0
+Jy = 1.0
+Jz = 1.0
+hx = 0.0
+hy = 0.0
+hz = 0.0
+
+tStep = 1.0
+tTotal = 10.0
+nSweeps = 4
+PresRadius = 1
+
+MaxDim = 64
+
+
+}
