@@ -228,6 +228,8 @@ namespace itensor
 	  ret *= vecComb(i);
 	  ret *= conj(basisChange(i));
 	  }
+      if(hermitianBasis_)
+	ret = realPart(ret);
       return noPrime(ret, "Site");
     }
 
@@ -240,6 +242,8 @@ namespace itensor
 	  ret *= vecComb(i);
 	  ret *= basisChange(i);
 	  }
+      if(hermitianBasis_)
+	ret = realPart(ret);
       return noPrime(ret, "Site");
     }
 

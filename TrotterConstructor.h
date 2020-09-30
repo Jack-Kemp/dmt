@@ -71,7 +71,8 @@ public:
 };
 
 
-BondGate swapInputOutput(const BondGate & gate, const SiteSet & sites)
+BondGate
+swapInputOutput(const BondGate & gate, const SiteSet & sites)
 {
   if(order(findInds(gate.gate(), "2")) > 0)
     return BondGate(sites, gate.i1(), gate.i2(), swapPrime(swapPrime(gate.gate(),0,2),1,3));
@@ -262,7 +263,8 @@ public:
 
   int maxRange() const {return maxRange_;}
 template<typename ValueType>
-void addLongRange(const std::string & opnameL,
+void
+addLongRange(const std::string & opnameL,
 		  const std::string & opnameR,
 		  int latticeSeparation,
 		  ValueType values,
@@ -281,7 +283,8 @@ void addLongRange(const std::string & opnameL,
 
 
 template<typename ValueType>
-void addNearestNeighbour(const std::string & opnameL,
+void
+addNearestNeighbour(const std::string & opnameL,
 			 const std::string & opnameR,
 			 ValueType values,
 			 const Args & args = Args::global())
@@ -291,7 +294,8 @@ void addNearestNeighbour(const std::string & opnameL,
 }
 
 template<typename ValueType>
-void addSingleSite(const std::string & opnameL,
+void
+addSingleSite(const std::string & opnameL,
 		   ValueType values,
 		   const Args & args = Args::global())
 {
@@ -299,7 +303,8 @@ void addSingleSite(const std::string & opnameL,
 }
 
 template<typename CalcGateClass>
-std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
+std::vector<BondGate>
+twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
 						SiteSet sites,
 						Real tSweep, const Args& args = Args::global())
 {
@@ -315,7 +320,39 @@ std::vector<BondGate> twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
   
   return gates;
 
+
 }
+
+//Return the Hamiltonian as an MPO using ITensor's AutoMPO feature
+//args controlling the precision of the MPO can be "Exact",
+//and "CutOff" and "MaxDim".
+  MPO
+  hamiltonian(SiteSet sites, const Args & args = Args::global()){
+    auto H = AutoMPO(sites);
+    const int N  = length(sites);
+    for (int b = 1; b <= N; ++b)
+      {
+	for (const auto& [opnames, cvals] : singleSite_)
+	  {
+	    H += cvals(b), opnames[0], b;
+	  }
+	if(b < N)
+	  for (const auto& [opnames, cvals] : nearestNeighbour_)
+	    {
+	      H += cvals(b), opnames[0], b, opnames[1], b+1;
+	    }
+	for (int sep = 2; (sep <= maxRange_) and ((b+sep) <= N); sep++){
+	  auto couplings = longRange_.find(sep);
+	  if (couplings != longRange_.end())
+	    for (const auto& [opnames, cvals] : couplings->second)
+	      {
+		 H += cvals(b), opnames[0], b, opnames[1], b+sep;
+	      }
+	}
+      }
+    return toMPO(H);
+  }
+    
 
   //EXPERIMENTAL Find the sum of the terms of the Hamiltonian soley
   //supported within site 1 to site 1 + maxRange.

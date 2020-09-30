@@ -37,6 +37,8 @@ WriteCorryy = true
 WriteS2 = true
 WriteMaxDim = true
 WriteTrace = true
+WriteEnergy = true
+WriteTruncErr = true
 
 SVDMethod = gesdd
 UseSVD = true

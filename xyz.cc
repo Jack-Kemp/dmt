@@ -132,6 +132,7 @@ int main(int argc, char* argv[])
     
   
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, {"Verbose", true});
+  auto hamiltonian = trott.hamiltonian(sites);
 
   //Set preserved operators and finish DMT set-up.
 
@@ -158,12 +159,20 @@ int main(int argc, char* argv[])
     data2D.emplace("SxSxNN", MatrixReal());
   if(input.getYesNo("WriteCorryy"))
     data2D.emplace("SySyNN", MatrixReal());
+
+
+  data.emplace("t", VecReal());
   if(input.getYesNo("WriteS2"))
     data.emplace("S2", VecReal());
   if(input.getYesNo("WriteMaxDim"))
     data.emplace("MaxDim", VecReal());
   if(input.getYesNo("WriteTrace"))
     data.emplace("Trace",VecReal());
+  if(input.getYesNo("WriteEnergy"))
+    data.emplace("Energy",VecReal());
+  if(input.getYesNo("WriteTruncErr"))
+    data.emplace("TruncErr",VecReal());
+  
 
 
   auto measure = [&](DMT& dmt, Args const & args){
@@ -189,7 +198,12 @@ int main(int argc, char* argv[])
 		   if(input.getYesNo("WriteMaxDim"))
 		     data["MaxDim"].push_back(maxLinkDim(dmt.rho()));
 		   if(input.getYesNo("WriteTrace"))
-		     data["Trace"].push_back(dmt.trace()); 
+		     data["Trace"].push_back(dmt.trace());
+		   if(input.getYesNo("WriteEnergy"))
+		     data["Energy"].push_back(calculateExpectation(hamiltonian, dmt).real());
+		   if(input.getYesNo("WriteTruncErr"))
+		     data["TruncErr"].push_back(args.getReal("TruncError"));
+		   data["t"].push_back(args.getReal("Time"));
 		 };
 
   
