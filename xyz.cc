@@ -202,9 +202,9 @@ int main(int argc, char* argv[])
 
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
 
-  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+  duration<double> timeSpan = duration_cast<duration<double>>(t2 - t1);
 
-  printfln("DMT evolution took %f seconds.", time_span.count());
+  printfln("DMT evolution took %f seconds.", timeSpan.count());
 
   //gateTEvol(mpsgates,paramsReal.at("ttotal"),tstep,psi,{"Cutoff=",paramsReal.at("cutoff"),"Verbose=",true});
   
@@ -212,12 +212,15 @@ int main(int argc, char* argv[])
   //printfln("Maximum MPS bond dimension after time evolution is %d",maxLinkDim(psi));
   printfln("Maximum MPO bond dimension after time evolution is %d",maxLinkDim(dmt.rho()));
 
+  std::map<std::string, double> runInfo = {{"TimeTaken", timeSpan.count()},
+					   {"MaxBondDim", maxLinkDim(dmt.rho())}};
+
   std::string label = outputDir + "/" +outputName; 
 
   //Write results-----------------------------------------------------
   std::filesystem::create_directory(outputDir);
 
-  writeDataToFile(label, data, data2D, inputName);
+  writeDataToFile(label, data, data2D, runInfo, inputName);
 
   return 0;
 }
