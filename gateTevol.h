@@ -65,11 +65,15 @@ namespace itensor {
     
 
     Real tsofar = 0;
+    Real truncerr = 0;
+    Spectrum spec;
+    
 
     //Initial measurement
     args.add("TimeStepNum",0);
     args.add("Time",tsofar);
     args.add("TotalTime",ttotal);
+    args.add("TruncError", truncerr);
     obs.interrupt(dmt, args);
     
     for(auto tt : range1(nt))
@@ -101,29 +105,31 @@ namespace itensor {
 		  //before applying current gate
 		  if(ni1 >= i2)
                     {
-		      dmt.svdBond(i1,AA,Fromleft,args);
+		      spec = dmt.svdBond(i1,AA,Fromleft,args);
 		      //dmt.position(ni1); //does no work if position already ni1
                     }
 		  else
                     {
-		      dmt.svdBond(i1,AA,Fromright,args);
+		      spec = dmt.svdBond(i1,AA,Fromright,args);
 		      //dmt.position(ni2); //does no work if position already ni2
                     }
                 }
 	      else
                 {
 		  //No next gate to analyze, just restore MPO form
-		  dmt.svdBond(i1,AA,Fromright,args);
+		  spec = dmt.svdBond(i1,AA,Fromright,args);
                 }
             }
 	}
-	
+
+	truncerr += spec.truncerr();
 	dmt.updateTraceCache();
         tsofar += tstep;
 
         args.add("TimeStepNum",tt);
         args.add("Time",tsofar);
         args.add("TotalTime",ttotal);
+	args.add("TruncError", truncerr);
         obs.interrupt(dmt, args);
       }
     if(verbose) 

@@ -17,10 +17,11 @@ std::string to_string_sstream(const A& num){
   return streamObj.str();
 }
 
-//Writes square data tabulated space delimited to a file, with column headers as a comment on top
-//and the argument file as comments at the end.
-template<class X, class Y>
-void writeDataToFile (std::string outName, const X& data, const Y& data2D, std::string argFileName){
+//Writes square data tabulated space delimited to a file, with column
+//headers as a comment on top and run information and argument file
+//as comments at the end.
+template<class X, class Y, class Z>
+void writeDataToFile (std::string outName, const X& data, const Y& data2D, const Z& runInfo, std::string argFileName){
   std::ifstream argFile;
   argFile.open(argFileName.c_str());
   std::ofstream outfile;
@@ -46,11 +47,18 @@ void writeDataToFile (std::string outName, const X& data, const Y& data2D, std::
 	outfile << value[i] << ' ';
       outfile << '\n';
     }
-    outfile <<'\n';
+    outfile <<"\n###############################################\n";
+    outfile <<"#                Run Information\n";
+    outfile <<"###############################################\n";
+    for(auto & [key, value] : runInfo)
+      outfile <<"#:" << key <<" = " << value <<"\n";
+    outfile <<"\n###############################################\n";
+    outfile <<"#                #Input Parameters\n";
+    outfile <<"###############################################\n";
     std::string str; 
     while (std::getline(argFile, str))
       {
-	outfile << '#' + str + '\n';
+	outfile << "#~" + str + '\n';
       }
     outfile.flush();
     outfile.close();

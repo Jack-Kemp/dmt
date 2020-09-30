@@ -81,6 +81,7 @@ int main(int argc, char* argv[])
   trott.addNearestNeighbour("Sz", "Sz", Jz);
         
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, args);
+  auto hamiltonian = trott.hamiltonian(sites);
 
   dmt.finishConstruction();
   
@@ -93,10 +94,15 @@ int main(int argc, char* argv[])
   data2D.emplace("Sz", MatrixReal());
   data2D.emplace("SzSzNN", MatrixReal());
 
+  data.emplace("t", VecReal());
   data.emplace("S2", VecReal());
   data.emplace("MaxDim", VecReal());
+  data.emplace("Energy",VecReal());
+  data.emplace("TruncError",VecReal());
+  
 
   auto measure = [&](DMT& dmt, Args const & args){
+		   //Initialise row to store measurements in data2D
 		   for (auto & [key, value] : data2D)
 		     value.push_back(VecReal());
 		   for(int i = 1; i <= N; i++)
@@ -104,8 +110,11 @@ int main(int argc, char* argv[])
 			 data2D["Sz"].back().push_back(calculateExpectation("Sz", i, dmt).real());
 			 data2D["SzSzNN"].back().push_back(calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real());
 		     }
+		   data["t"].push_back(args.getReal("Time"));
 		   data["S2"].push_back(secondRenyiEntropyHalfSystem(dmt));
 		   data["MaxDim"].push_back(maxLinkDim(dmt.rho()));
+		   data["Energy"].push_back(calculateExpectation(hamiltonian, dmt).real());
+		   data["TruncError"].push_back(args.getReal("TruncError"));
 		 };
 
   
@@ -118,19 +127,20 @@ int main(int argc, char* argv[])
 
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
 
-  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+  duration<double> timeSpan = duration_cast<duration<double>>(t2 - t1);
 
-  printfln("DMT evolution took %f seconds.", time_span.count());
-
-  //printfln("Maximum MPS bond dimension after time evolution is %d",maxLinkDim(psi));
+  printfln("DMT evolution took %f seconds.", timeSpan.count());
   printfln("Maximum MPO bond dimension after time evolution is %d",maxLinkDim(dmt.rho()));
 
+  std::map<std::string, double> runInfo = {{"TimeTaken", timeSpan.count()},
+					   {"MaxBondDim", maxLinkDim(dmt.rho())}};
+  
   std::string label = outputDir + "/" +outputName; 
 
   //Write results-----------------------------------------------------
   std::filesystem::create_directory(outputDir);
 
-  writeDataToFile(label, data, data2D, inputName);
+  writeDataToFile(label, data, data2D, runInfo, inputName);
 
   return 0;
 }

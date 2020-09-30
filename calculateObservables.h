@@ -8,6 +8,9 @@
 using namespace itensor;
 
 //DMT Functions
+
+
+//Calculate expectation of op_name on site i
 Complex
 calculateExpectation( const char * op_name, const int& site_i,
 		      const DMT& dmt){
@@ -16,6 +19,20 @@ calculateExpectation( const char * op_name, const int& site_i,
   return eltC(exp)/dmt.trace();
 }
 
+//Calculate expectation of MPO op.
+
+//As part of the calculation this must be converted to DMT basis,
+//(a no op if not vector basis). If you are going to call with same
+//MPO many times, an optimisation is to preconvert and then set
+//convertToDMTBasis = False.
+Complex
+calculateExpectation( const MPO& op,
+		      const DMT& dmt,
+		      bool convertToDMTBasis = true){
+  return dmt.trace(op, convertToDMTBasis)/dmt.trace();
+}
+
+//Calculate expectation <(op_name on site i) * (op_name on site j)>
 Complex
 calculateTwoPoint(const char * op_name_i, const int& site_i,
 		   const char * op_name_j, const int& site_j,
@@ -32,6 +49,8 @@ calculateTwoPoint(const char * op_name_i, const int& site_i,
   return eltC(left*right)/dmt.trace();
 }
 
+//Calculate the reduced matrix from siteStart to siteEnd inclusive,
+//i.e. trace out all sites NOT between siteStart to siteEnd inclusive.
 ITensor
 reducedDensityMatrix(const DMT& dmt, int siteStart, int siteEnd){
   auto left = dmt.traceLeftOf(siteStart);

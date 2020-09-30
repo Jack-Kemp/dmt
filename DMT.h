@@ -24,7 +24,9 @@
 // _ after a variable is private.
 
 //StateOps have indices <Out> <In>' as MPO and <Out> as MPS.
-//SiteOps always have indices <Out>' <In>. (See DMTSiteSet).
+//SiteOps have indices <Out>' <In>  and <Out> as MPS.
+//This means siteOp*stateOp == tr(siteOp stateOp) in either language.
+//(See DMTSiteSet.h for more information).
 
 namespace itensor{
 
@@ -207,6 +209,8 @@ namespace itensor{
   public:
 
 
+    //EXPERIMENTAL -- set preserved operators rather than calculating all.
+
     //Add state operator presOp with support on lattice support to preserved operators.
     void
     addPresOperator(ITensor presOp, int support, bool convertToStateOp = false)
@@ -221,6 +225,71 @@ namespace itensor{
       else
 	presOps_[support].push_back(presOp);
     }
+    
+    //Number of preserved operators on radius number of sites.
+    int
+    presDim(const int & radius) const
+    {
+      return cnPresOps[radius-1];
+    }
+
+    //BASIS FUNCTIONS -- for conversion into DMT basis---------------------------------
+
+    //Get the identity matrix as siteOp from [siteStart, siteEnd).
+    ITensor
+    getId(int siteStart, int siteEnd)
+    {
+      ITensor id = ITensor(1);
+      for (int i = siteStart; i<siteEnd; i++)
+	id *= siteOp("Id", i); 
+      return id;
+    }
+
+    //Get the operator op_name on site_i as a siteOp (<Out>'<In>)
+    ITensor
+    siteOp(const char* op_name, int site_i) const
+    {
+      return op(*dmtSites_, op_name, site_i);
+    }
+
+    //Get the operator op_name on site_i as a stateOp (<Out><In>')
+    ITensor
+    stateOp(const char* op_name, int site_i) const
+    {
+      return dmtSites_->stateOp(op_name, site_i);
+    }
+
+    //Get the operator op supported on [site_start, site_end) as a siteOp
+    ITensor
+    convertToSiteOp(ITensor op, int site_start, int site_end) const
+    {
+      return dmtSites_->convertToSiteOp(op, site_start, site_end);
+    }
+
+    //Get the operator op supported on [site_start, site_end) as a stateOp
+    ITensor
+    convertToStateOp(ITensor op, int site_start, int site_end) const
+    {
+      return dmtSites_->convertToStateOp(op, site_start, site_end);
+    }
+
+    //Convert MPO mpo to DMT basis. An optimisation if you need to
+    //do many calculations with mpo and rho.
+    MPO convertToDMTBasis(const MPO & mpo) const
+    {
+      if(not vectorBasis_)
+	return mpo;
+      MPO ret(mpo);
+      for(auto i : range1(length(ret)))
+	{
+	  ret.ref(i) = dmtSites_->convertToSiteOp(ret(i), i, i+1);
+	}
+      return ret;
+    }
+
+
+    
+    //TRACE FUNCTIONS: For updating the trace cache and returning the trace---------------
 
 
     //Fully update the cache for tracing out from the left.
@@ -265,8 +334,6 @@ namespace itensor{
 	ctraceRightOf_[site-1] = traceOf(site+1)*ctraceRightOf_[site];
     }
 
-    //Getter-setter Methods. Ref methods return a modifiable reference.
-
     ITensor
     traceLeftOf(int presL) const
     {
@@ -285,43 +352,29 @@ namespace itensor{
     }
 
     ITensor
-     traceOf(int site_i) const{
+    traceOf(int site_i) const{
       if (vectorized_)
 	return op(*dmtSites_,"Id", site_i)*rho_(site_i);
       else 
 	return rho_(site_i) * delta(dag(siteInds(rho_, site_i)));
     }
 
+    //Tr(rho A). If A is already in DMT basis, convert = false.
+    Complex
+    trace(const MPO & A, bool convert = true) const{
+      if (convert)
+	return traceC(rho_, convertToDMTBasis(A));
+      else
+	return traceC(rho_, A);
+    }
+
+    //GETTER-SETTER METHODS -- notice "Ref" methods return modifiable references---------
+
+     //Return the rotation Q needed to put rho in truncatable form
     ITensor
     Qpres(const int & radius, const Index & csiteInds) const
     {
       return cQpres[radius-1]*delta(cQpresInds[radius-1], csiteInds);
-    }
-    
-    //Number of preserved operators on radius number of sites.
-    int
-    presDim(const int & radius) const
-    {
-      return cnPresOps[radius-1];
-    }
-
-    //Get the identity matrix as siteOp from [siteStart, siteEnd).
-    ITensor
-    getId(int siteStart, int siteEnd){
-      ITensor id = ITensor(1);
-      for (int i = siteStart; i<siteEnd; i++)
-	id *= siteOp("Id", i); 
-      return id;
-    }
-
-    ITensor
-    siteOp(const char* op_name, int site_i) const{
-      return op(*dmtSites_, op_name, site_i);
-    }
-
-    ITensor
-    stateOp(const char* op_name, int site_i) const{
-      return dmtSites_->stateOp(op_name, site_i);
     }
 
     const DMTSiteSet &
@@ -713,13 +766,13 @@ namespace itensor{
     }
 
     //Overload for svdBond without noise matrix.
-     void
+     Spectrum
     svdBond(int b, 
             ITensor const& AA, 
             Direction dir,
             Args args = Args::global())
     {
-      this->svdBond(b,AA,dir, LocalOp(), args);
+      return this->svdBond(b,AA,dir, LocalOp(), args);
     }
 
 
