@@ -117,7 +117,7 @@ class TrotterConstructor {
 
   for(int b = 1; b < N; ++b)
     {
-      auto hterm = ITensor(op(sites,"Id",1).inds());
+      auto hterm = ITensor(getId(sites,b,b+2).inds()).fill(0.0);
       for (const auto& [opnames, cvals] : nearestNeighbour_){
 	hterm += cvals(b)*op(sites, opnames[0], b)*op(sites, opnames[1], b+1);
 	if (verbose) printfln((opnames[0] + opnames[1] + " at %d,%d: %f").c_str(), b, b+1,  cvals(b));
@@ -178,7 +178,7 @@ class TrotterConstructor {
 	}
 
 	//First deal with nearest neighbour and single-site terms.
-	auto hterm = ITensor(op(sites,"Id",1).inds());
+	auto hterm = ITensor(getId(sites,b,b+2).inds()).fill(0.0);
 	for (const auto& [opnames, cvals] : nearestNeighbour_){
 	  hterm += cvals(b)*op(sites, opnames[0], b)*op(sites, opnames[1], b+1);
 	  if (verbose) printfln((opnames[0] + opnames[1] + " at %d,%d: %f").c_str(), b, b+1,  cvals(b));
@@ -223,21 +223,18 @@ class TrotterConstructor {
 	    newgates++;   
 	    for (int sep = 2; sep < range; sep++){
 	      auto couplings = longRange_.find(sep);
-	      auto hterm = ITensor(op(sites,"Id",1).inds());
+	      auto hterm =  ITensor(getId(sites,b+sep-1,b+sep+1).inds()).fill(0.0);
 	      if (couplings != longRange_.end())
 		for (const auto& [opnames, cvals] : couplings->second)
 		  {
 		    hterm += cvals(b)*op(sites, opnames[0], b+sep-1)*op(sites, opnames[1], b+sep);
 		    if (verbose) printfln((opnames[0] + opnames[1] + " at %d,%d: %f").c_str(), b, b+sep,  cvals(b));
 		  }
-	      else
-		hterm = op(sites, "Id", b+sep-1)*op(sites, "Id", b+sep);
 	      gates.push_back(calc.calcGate(hterm, tSweep/4, b+sep-1, args));
 	      newgates++;
 	    }
-
 	    auto couplings = longRange_.find(range);
-	    auto hterm = ITensor(op(sites,"Id",1).inds());
+	    auto hterm =  ITensor(getId(sites,b+range-1,b+range+1).inds()).fill(0.0);
 	    for (const auto& [opnames, cvals] : couplings->second)
 	      {
 		hterm += cvals(b)*op(sites, opnames[0], b+range-1)*op(sites, opnames[1], b+range);
