@@ -45,7 +45,7 @@ public:
   {   
   }
 
-  CouplingValues(VecReal vals, Args args = Args::global()):
+  CouplingValues(const VecReal & vals, Args args = Args::global()):
     vals_(vals),
     repeat_(args.getBool("Repeat", false)),
     len_(vals.size()),
@@ -264,7 +264,7 @@ void
 addLongRange(const std::string & opnameL,
 		  const std::string & opnameR,
 		  int latticeSeparation,
-		  ValueType values,
+		  const ValueType & values,
 		  const Args & args = Args::global())
 {
   if (latticeSeparation == 1)
@@ -283,7 +283,7 @@ template<typename ValueType>
 void
 addNearestNeighbour(const std::string & opnameL,
 			 const std::string & opnameR,
-			 ValueType values,
+			 const ValueType & values,
 			 const Args & args = Args::global())
 {
   nearestNeighbour_[{opnameL, opnameR}] = CouplingValues(values, args);
@@ -293,7 +293,7 @@ addNearestNeighbour(const std::string & opnameL,
 template<typename ValueType>
 void
 addSingleSite(const std::string & opnameL,
-		   ValueType values,
+		   const ValueType & values,
 		   const Args & args = Args::global())
 {
   singleSite_[{opnameL}] = CouplingValues (values, args);
