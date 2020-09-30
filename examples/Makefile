@@ -5,8 +5,8 @@
 # 2. Edit LIBRARY_DIR to point at the location of your ITensor Library
 #    source folder (this is the folder that has options.mk in it)
 #    DMT_DIR is the directory with the DMT header files.
-LIBRARY_DIR=../../ITensor
-DMT_DIR=../
+LIBRARY_DIR=/n/home06/jkemp/ITensor
+DMT_DIR=/n/home06/jkemp/SharedDMT
 
 # 3. If your 'main' function is in a file called 'myappname.cc', then
 #    set APP to 'myappname'. Running 'make' will compile the app.
