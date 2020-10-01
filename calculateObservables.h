@@ -51,6 +51,8 @@ calculateTwoPoint(const char * op_name_i, const int& site_i,
 
 //Calculate the reduced matrix from siteStart to siteEnd inclusive,
 //i.e. trace out all sites NOT between siteStart to siteEnd inclusive.
+//This returns a TENSOR, not an MPO, so if the region
+//not traced out is large this will be very LARGE.
 ITensor
 reducedDensityMatrix(const DMT& dmt, int siteStart, int siteEnd){
   auto left = dmt.traceLeftOf(siteStart);
@@ -61,11 +63,17 @@ reducedDensityMatrix(const DMT& dmt, int siteStart, int siteEnd){
   return left*right; 
 }
 
+//Because this takes the square of the density matrix, it is signifcantly
+//more taxing to compute than the above quantities. Only measure if you need
+//it.
 Real secondRenyiEntropyHalfSystem(const DMT& dmt){
-  auto rdm = reducedDensityMatrix(dmt, floor(dmt.len()/2)+1, dmt.len())/dmt.trace();
-  auto rdm2_trace = rdm*dag(rdm);
-  //auto rdm2_trace = rdm2*delta(dag(rdm2.inds()));
-  return abs(log(eltC(rdm2_trace)));
+  auto centre = floor(dmt.len()/2)+1;
+  auto left = dmt.traceLeftOf(centre);
+  left *= prime(left);
+  for (int i = centre; i <= dmt.len(); i++){
+    left *= dmt.rho(i)*prime(dag(dmt.rho(i)), "Link");
+  }
+  return abs(log(eltC(left)))/(dmt.trace()*dmt.trace());
 }
 
 

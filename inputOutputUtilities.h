@@ -26,27 +26,49 @@ void writeDataToFile (std::string outName, const X& data, const Y& data2D, const
   argFile.open(argFileName.c_str());
   std::ofstream outfile;
   outfile.open(outName.c_str(), std::ios::trunc);
+  std::vector<std::string> ignoreCols;
+
+  //Check data is actually square, ignore cols with nrows < max(nrows)
+  uint size = 0;
+  for (auto & [key, value] : data2D)
+    size = value.size() > size ? value.size() : size;
+  for (auto & [key, value] : data)
+    size = value.size() > size ? value.size() : size;
+  for (auto & [key, value] : data2D)
+    if(size != value.size()){
+      std::cout<<key<<" has only "<< value.size() << "rows, not writing.";
+      ignoreCols.push_back(key);
+    }
+  for (auto & [key, value] : data)
+    if(size != value.size()){
+      std::cout<<key<<" has only "<< value.size() << " rows, not writing.";
+      ignoreCols.push_back(key);
+    }
+  
   if(outfile and argFile){
+    //Write the column labels
     outfile << '#';
     for (auto & [key, value] : data2D)
-      for(uint i = 0; i < value[0].size(); i++)
-	outfile << key +  '_' + to_string_sstream(i) + ' ';
+      if(std::find(ignoreCols.begin(), ignoreCols.end(), key) == ignoreCols.end())
+	for(uint i = 0; i < value[0].size(); i++)
+	  outfile << key +  '_' + to_string_sstream(i) + ' ';
     for (auto & [key, value] : data)
-      outfile << key + ' ';
+      if(std::find(ignoreCols.begin(), ignoreCols.end(), key) == ignoreCols.end())
+	outfile << key + ' ';
     outfile << '\n';
-    uint size = 0;
-    if(not data.empty())
-      size = data.begin()->second.size();
-    else if (not data2D.empty())
-      size = data2D.begin()->second.size();
+
+    //Write the data in rows
     for (uint i = 0; i<size; i++){
       for (auto & [key, value] : data2D)
-	for(uint j = 0; j < value[0].size(); j++)
-	  outfile << value[i][j] << " ";
+	if(std::find(ignoreCols.begin(), ignoreCols.end(), key) == ignoreCols.end())
+	  for(uint j = 0; j < value[0].size(); j++)
+	    outfile << value[i][j] << " ";
       for(auto & [key, value] : data)
-	outfile << value[i] << ' ';
+	if(std::find(ignoreCols.begin(), ignoreCols.end(), key) == ignoreCols.end())
+	  outfile << value[i] << ' ';
       outfile << '\n';
     }
+    
     outfile <<"\n###############################################\n";
     outfile <<"#                Run Information\n";
     outfile <<"###############################################\n";

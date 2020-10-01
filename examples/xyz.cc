@@ -95,7 +95,6 @@ int main(int argc, char* argv[])
   data2D.emplace("SzSzNN", MatrixReal());
 
   data.emplace("t", VecReal());
-  data.emplace("S2", VecReal());
   data.emplace("MaxDim", VecReal());
   data.emplace("Energy",VecReal());
   data.emplace("TruncError",VecReal());
@@ -111,7 +110,6 @@ int main(int argc, char* argv[])
 			 data2D["SzSzNN"].back().push_back(calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real());
 		     }
 		   data["t"].push_back(args.getReal("Time"));
-		   data["S2"].push_back(secondRenyiEntropyHalfSystem(dmt));
 		   data["MaxDim"].push_back(maxLinkDim(dmt.rho()));
 		   data["Energy"].push_back(calculateExpectation(hamiltonian, dmt).real());
 		   data["TruncError"].push_back(args.getReal("TruncError"));
