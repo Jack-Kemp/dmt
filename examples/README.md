@@ -10,16 +10,18 @@ Copy this folder to your desired directory (rename it to something helpful!), th
 	
 	make
 	
-Now if it makes successfully you can run using (on a test node!):
+Now if it makes successfully you can run using (on a test node if you can get it to work -- they fail to run anything at all for me):
+
+	export OMP_NUM_THREADS=1 # or number of threads desired.
 
 	./xyz xyz_example_input_params.txt
 	
-The output should go into ./out. The python notebook Analysis.ipynb has an example of how you can read in and plot this output data.
+If you haven't changed the input parameters, the output should go into ./out. The python notebook Analysis.ipynb has an example of how you can read in and plot this output data.
 
 
 # Submitting to the cluster #
 
-The python script submit.py can sumbit to Odyssey. Usage:
+The python script submit.py can submit to Odyssey. Usage:
 
 	python submit.py ./xyz xyz_example_input_params.txt
 	
@@ -39,13 +41,13 @@ If you wish to compile your own code, use
 	
 	make APP=your_name
 
-or change the hardcoded APP variables in the Makefile.
+or change the hardcoded APP variable in the Makefile.
 	
 	make debug
 	
 will compile the debug version of the code, which has a "-g" appended to it.
 
-You can then use gdb to debug (or run under valgrind, etc.).
+You can then use gdb to debug (or run under valgrind, heaptrack etc.).
 
 
 

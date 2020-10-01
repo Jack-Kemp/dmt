@@ -1,10 +1,13 @@
-from parse_io import read_args, write_args
-import sys
 import shutil
 import os
 from subprocess import check_output
 from glob import glob
 import time
+import sys
+sys.path.append('/n/home06/jkemp/SharedDMT')
+from parse_io import read_args, write_args
+
+
 
 def main(argv):
     """Submit a batch job for DMT.
