@@ -24,7 +24,7 @@ namespace itensor
     
   protected:
     SiteSet sites_;
-    using StrVec = std::vector<const char *>;
+    using StrVec = std::vector<std::string>;
     using StrITensorMap = std::map<std::string, ITensor>;
     
 

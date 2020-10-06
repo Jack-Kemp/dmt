@@ -12,14 +12,14 @@
 #include"TrotterConstructor.h"
 #include "ArgInput.h"
 
-
-
 using namespace itensor;
 using std::vector;
 using namespace std::chrono;
 
 typedef std::vector<Real> VecReal;
 typedef std::vector<VecReal> MatrixReal;
+
+
 
 int main(int argc, char* argv[])
 {
@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
   //Set up physical basis and initial state---------------------------
 
   auto sites = SpinHalf(N, {"ConserveQNs=", conserveQNs});
-  auto vectorBasis = {"Id", "Sx", "Sy", "Sz"};
+  std::vector<std::string> vectorBasis = {"Id", "Sx", "Sy", "Sz"};
   
   auto dmt = DMT(sites, vectorBasis, args);
   

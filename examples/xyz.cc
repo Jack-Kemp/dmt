@@ -12,6 +12,7 @@ using namespace std::chrono;
 
 typedef std::vector<Real> VecReal;
 typedef std::vector<VecReal> MatrixReal;
+typedef std::vector<std::string> VecStr;
 
 int main(int argc, char* argv[])
 {
@@ -50,7 +51,7 @@ int main(int argc, char* argv[])
   //Set up physical basis and initial state---------------------------
 
   auto sites = SpinHalf(N, {"ConserveQNs=", false});
-  auto vectorBasis = {"Id", "Sx", "Sy", "Sz"};
+  VecStr vectorBasis = {"Id", "Sx", "Sy", "Sz"};
   
   auto dmt = DMT(sites, vectorBasis, args);
   
