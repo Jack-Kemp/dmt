@@ -1,0 +1,184 @@
+#if 1
+#include "allDMT.h"
+#include "itensor/all.h"
+
+#include<chrono>
+#include<functional>
+#include<filesystem>
+
+using namespace itensor;
+using std::vector;
+using namespace std::chrono;
+
+typedef std::vector<Real> VecReal;
+typedef std::vector<VecReal> MatrixReal;
+typedef std::vector<std::string> VecStr;
+
+int main(int argc, char* argv[])
+{
+
+  //Get input parameters and options --------------------------------
+  const char* inputName;
+  if (argc > 1) {
+    inputName = argv[1];
+  }
+  else{ 
+    printfln("Using default parameter file.");
+    inputName = "xyz_example_input_params.txt";
+  }
+  
+  auto input = InputGroup(inputName,"input");
+  auto args = readInMandatoryArgs(input);
+
+  const int N = input.getInt("N");
+  const Real tStep = input.getReal("tStep");
+  const Real tSweep = tStep/input.getInt("nSweeps");
+  const Real tTotal = input.getReal("tTotal");
+
+  Real hx = input.getReal("hx");
+  Real hy = input.getReal("hy");
+  Real hz = input.getReal("hz");
+  Real Jx = input.getReal("Jx");
+  Real Jy = input.getReal("Jy");
+  Real Jz = input.getReal("Jz");
+
+  auto outputDir = input.getString("OutputDir"); 
+  auto outputName = input.getString("OutputName");
+
+  //End input-output options -----------------------------------------
+
+ 
+  //Set up physical basis and initial state---------------------------
+
+  auto sites = SpinHalf(N, {"ConserveQNs=", false});
+  VecStr vectorBasis = {"Id", "Sx", "Sy", "Sz"};
+  
+  auto dmt = DMT(sites, vectorBasis, args);
+  
+  auto state = InitState(sites);
+  for(auto j : range1(N))
+    {
+      //Alternating up/down spins
+      state.set(j,j%2==1?"Up":"Dn");
+    }
+  auto psi = MPS(state);
+  dmt.fromPureState(psi);
+			   
+  //Set up Hamilitonian----------------------------------------------
+
+
+  TrotterConstructor trott;
+
+  trott.addSingleSite("Sx", hx);
+  trott.addSingleSite("Sy", hy);
+  trott.addSingleSite("Sz", hz);
+ 
+  trott.addNearestNeighbour("Sx","Sx", Jx);
+  trott.addNearestNeighbour("Sy","Sy", Jy);
+  trott.addNearestNeighbour("Sz", "Sz", Jz);
+        
+  auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, args);
+  auto tebdgates = trott.twoSiteGates2ndOrderSweep(CalcTEBDGate(sites), sites, tSweep, args);
+  auto hamiltonian = trott.hamiltonian(sites);
+
+  dmt.finishConstruction();
+  
+
+  //Set up measurements-----------------------------------------------
+
+  std::map<std::string, MatrixReal> data2D, data2DMPS;
+  std::map<std::string, VecReal> data, dataMPS;
+  
+  data2D.emplace("Sz", MatrixReal());
+  data2D.emplace("SzSzNN", MatrixReal());
+
+  data.emplace("t", VecReal());
+  data.emplace("MaxDim", VecReal());
+  data.emplace("Energy",VecReal());
+  data.emplace("TruncError",VecReal());
+
+  data2DMPS.emplace("Sz", MatrixReal());
+  data2DMPS.emplace("SzSzNN", MatrixReal());
+
+  dataMPS.emplace("t", VecReal());
+  dataMPS.emplace("MaxDim", VecReal());
+  dataMPS.emplace("Energy",VecReal());
+  dataMPS.emplace("TruncError",VecReal());
+  
+
+  auto measureDMT = [&](DMT& dmt, Args const & args){
+		   //Initialise row to store measurements in data2D
+		   for (auto & [key, value] : data2D)
+		     value.push_back(VecReal());
+		   for(int i = 1; i <= N; i++)
+		     {
+			 data2D["Sz"].back().push_back(calculateExpectation("Sz", i, dmt).real());
+			 data2D["SzSzNN"].back().push_back(calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real());
+		     }
+		   data["t"].push_back(args.getReal("Time"));
+		   data["MaxDim"].push_back(maxLinkDim(dmt.rho()));
+		   data["Energy"].push_back(calculateExpectation(hamiltonian, dmt).real());
+		   data["TruncError"].push_back(args.getReal("TruncError"));
+		 };
+
+   auto measureMPS = [&](MPS& psi, Args const & args){
+		   //Initialise row to store measurements in data2D
+		   for (auto & [key, value] : data2DMPS)
+		     value.push_back(VecReal());
+		   for(int i = 1; i <= N; i++)
+		     {
+			 data2DMPS["Sz"].back().push_back(calculateExpectation("Sz", i, psi, sites).real());
+			 data2DMPS["SzSzNN"].back().push_back(calculateTwoPoint("Sz", i, "Sz", (i%N)+1, psi, sites).real());
+		     }
+		   dataMPS["t"].push_back(args.getReal("Time"));
+		   dataMPS["MaxDim"].push_back(maxLinkDim(psi));
+		   dataMPS["Energy"].push_back(calculateExpectation(hamiltonian, psi).real());
+		   dataMPS["TruncError"].push_back(args.getReal("TruncError"));
+		 };
+
+  
+  DMTObserver obs(measureDMT);
+  TEBDObserver obsMPS(measureMPS);
+
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  
+  //Time evolve-------------------------------------------------------
+  gateTEvol(dmtgates, tTotal, tStep, dmt, obs, args);
+
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+
+  duration<double> timeSpan = duration_cast<duration<double>>(t2 - t1);
+
+  printfln("DMT evolution took %f seconds.", timeSpan.count());
+  printfln("Maximum MPO bond dimension after time evolution is %d",maxLinkDim(dmt.rho()));
+
+
+  t1 = high_resolution_clock::now();
+  
+  //Time evolve-------------------------------------------------------
+  tebdTEvol(tebdgates, tTotal, tStep, psi, obsMPS, args);
+
+  t2 = high_resolution_clock::now();
+
+  duration<double> timeSpanMPS = duration_cast<duration<double>>(t2 - t1);
+
+  printfln("MPS evolution took %f seconds.", timeSpanMPS.count());
+  printfln("Maximum MPS bond dimension after time evolution is %d",maxLinkDim(psi));
+
+  std::map<std::string, double> runInfo = {{"TimeTaken", timeSpan.count()},
+					   {"MaxBondDim", maxLinkDim(dmt.rho())}};
+
+  std::map<std::string, double> runInfoMPS = {{"TimeTaken", timeSpanMPS.count()},
+					   {"MaxBondDim", maxLinkDim(psi)}};
+  
+  std::string label = outputDir + "/" +outputName; 
+
+  //Write results-----------------------------------------------------
+  std::filesystem::create_directory(outputDir);
+
+  writeDataToFile(label, data, data2D, runInfo, inputName);
+  writeDataToFile(label + "_MPS", dataMPS, data2DMPS, runInfoMPS, inputName);
+
+  return 0;
+}
+#endif
