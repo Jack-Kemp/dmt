@@ -18,7 +18,7 @@ using namespace std::chrono;
 
 typedef std::vector<Real> VecReal;
 typedef std::vector<VecReal> MatrixReal;
-
+typedef std::vector<std::string> VecStr;
 
 
 int main(int argc, char* argv[])
@@ -147,63 +147,63 @@ int main(int argc, char* argv[])
   std::map<std::string, MatrixReal> data2D;
   std::map<std::string, VecReal> data;
 
-  if(input.getYesNo("WriteMagz"))
-     data2D.emplace("Sz", MatrixReal());
-  if(input.getYesNo("WriteMagx"))
-     data2D.emplace("Sx", MatrixReal());
-  if(input.getYesNo("WriteMagy"))
-     data2D.emplace("Sy", MatrixReal());
-  if(input.getYesNo("WriteCorrzz"))
-    data2D.emplace("SzSzNN", MatrixReal());
-  if(input.getYesNo("WriteCorrxx"))
-    data2D.emplace("SxSxNN", MatrixReal());
-  if(input.getYesNo("WriteCorryy"))
-    data2D.emplace("SySyNN", MatrixReal());
 
+  VecStr dataNames2D = {
+		  "Sz",
+		  "Sx",
+		  "Sy",
+		  "SzSzNN",
+		  "SxSxNN",
+		  "SySyNN"
+  };
 
+  VecStr dataNames = {"S2",
+		  "Trace",
+		  "Energy",
+		  "MaxDim",
+		  "TruncErr"
+  };
+
+  for (const auto & name : dataNames2D)
+    if(input.getYesNo("Write" + name, false))
+      data2D.emplace(name, MatrixReal());
+  for (const auto & name : dataNames)
+    if(input.getYesNo("Write" + name, false))
+      data.emplace(name, VecReal());
   data.emplace("t", VecReal());
-  if(input.getYesNo("WriteS2"))
-    data.emplace("S2", VecReal());
-  if(input.getYesNo("WriteMaxDim"))
-    data.emplace("MaxDim", VecReal());
-  if(input.getYesNo("WriteTrace"))
-    data.emplace("Trace",VecReal());
-  if(input.getYesNo("WriteEnergy"))
-    data.emplace("Energy",VecReal());
-  if(input.getYesNo("WriteTruncErr"))
-    data.emplace("TruncErr",VecReal());
-  
-
 
   auto measure = [&](DMT& dmt, Args const & args){
+		   Real ret;
 		   for (auto & [key, value] : data2D)
 		     value.push_back(VecReal());
 		   for(int i = 1; i <= N; i++)
 		     {
-		       if(input.getYesNo("WriteMagz"))
-			 data2D["Sz"].back().push_back(calculateExpectation("Sz", i, dmt).real());
-		       if(input.getYesNo("WriteMagx"))
-			 data2D["Sx"].back().push_back(calculateExpectation("Sx", i, dmt).real());
-		       if(input.getYesNo("WriteMagy"))
-			  data2D["Sy"].back().push_back(calculateExpectation("Sy", i, dmt).real());
-		       if(input.getYesNo("WriteCorrzz"))
-			 data2D["SzSzNN"].back().push_back(calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real());
-		       if(input.getYesNo("WriteCorrxx"))
-			  data2D["SxSxNN"].back().push_back(calculateTwoPoint("Sx", i, "Sx", (i%N)+1, dmt).real());
-		       if(input.getYesNo("WriteCorryy"))
-			  data2D["SySyNN"].back().push_back(calculateTwoPoint("Sy", i, "Sy", (i%N)+1, dmt).real());
+		       
+		       for (auto & [key, value] : data2D)
+			 {
+			 switch( hash(key.c_str()) ){
+			 case "Sz"_: ret  = calculateExpectation("Sz", i, dmt).real(); break;
+			 case "Sx"_: ret  = calculateExpectation("Sx", i, dmt).real(); break;
+			 case "Sy"_: ret  = calculateExpectation("Sy", i, dmt).real(); break;
+			 case "SzSzNN"_: ret  = calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real(); break;
+			 case "SxSxNN"_: ret  = calculateTwoPoint("Sx", i, "Sx", (i%N)+1, dmt).real(); break;
+			 case "SySyNN"_: ret  = calculateTwoPoint("Sy", i, "Sy", (i%N)+1, dmt).real(); break;
+			 }
+			 value.back().push_back(ret);
+			 }
 		     }
-		   if(input.getYesNo("WriteS2"))
-		      data["S2"].push_back(secondRenyiEntropyHalfSystem(dmt));
-		   if(input.getYesNo("WriteMaxDim"))
-		     data["MaxDim"].push_back(maxLinkDim(dmt.rho()));
-		   if(input.getYesNo("WriteTrace"))
-		     data["Trace"].push_back(dmt.trace());
-		   if(input.getYesNo("WriteEnergy"))
-		     data["Energy"].push_back(calculateExpectation(hamiltonian, dmt).real());
-		   if(input.getYesNo("WriteTruncErr"))
-		     data["TruncErr"].push_back(args.getReal("TruncError"));
-		   data["t"].push_back(args.getReal("Time"));
+		   for (auto & [key, value] : data)
+			 {
+			   switch( hash(key.c_str()) ){
+			   case "S2"_: ret  = secondRenyiEntropyHalfSystem(dmt); break;
+			   case "MaxDim"_: ret = maxLinkDim(dmt.rho()); break;
+			   case "Trace"_: ret = dmt.trace(); break;
+			   case "Energy"_: ret = calculateExpectation(hamiltonian, dmt).real(); break;
+			   case "t"_: ret = args.getReal("Time");
+			   case "TruncErr"_: ret = args.getReal("TruncError");
+			   }
+			   value.push_back(ret);
+			 }
 		 };
 
   
