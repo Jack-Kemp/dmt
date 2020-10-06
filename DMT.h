@@ -707,7 +707,7 @@ namespace itensor{
 	      //Need high accuracy, use svd which calls the
 	      //accurate SVD method in the MatrixRef library
 	      ITensor Dv, Av(indDL), Bv(indDR);
-	      res = svd(newAA,Av,Dv,Bv,thirdSVDArgs);
+	      svd(newAA,Av,Dv,Bv,thirdSVDArgs);
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
@@ -726,7 +726,7 @@ namespace itensor{
 	      //or need to use noise term
 	      //use density matrix approach
 	      ITensor Av(indDL), Bv(indDR);
-	      res = denmatDecomp(newAA,Av,Bv,dir,PH,thirdSVDArgs);
+	      denmatDecomp(newAA,Av,Bv,dir,PH,thirdSVDArgs);
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
