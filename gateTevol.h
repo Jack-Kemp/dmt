@@ -106,12 +106,10 @@ namespace itensor {
 		  if(ni1 >= i2)
                     {
 		      spec = dmt.svdBond(i1,AA,Fromleft,args);
-		      //dmt.position(ni1); //does no work if position already ni1
                     }
 		  else
                     {
 		      spec = dmt.svdBond(i1,AA,Fromright,args);
-		      //dmt.position(ni2); //does no work if position already ni2
                     }
                 }
 	      else
@@ -119,10 +117,11 @@ namespace itensor {
 		  //No next gate to analyze, just restore MPO form
 		  spec = dmt.svdBond(i1,AA,Fromright,args);
                 }
-            }
+	      truncerr += spec.truncerr();
+            }	  
 	}
 
-	truncerr += spec.truncerr();
+	
 	dmt.updateTraceCache();
         tsofar += tstep;
 

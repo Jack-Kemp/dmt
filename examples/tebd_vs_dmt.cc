@@ -55,18 +55,14 @@ int main(int argc, char* argv[])
   
   auto dmt = DMT(sites, vectorBasis, args);
   
-  //Initialise from product of MPO operators
-  for(int j = 1; j <= N; ++j)
-	{
-	  //Alternating Spins
-	  dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(2*(j %2)-1)*dmt.stateOp("Sz",j);
-
-	  //Unpolarized except for centre spin
-	  //dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*(j == centre)*dmt.stateOp("Sz",j);
-
-	  //Single Domain Wall
-	  //dmt.rhoRef(j) = dmt.stateOp("Id",j)+2*( 2*(j > centre) -1 )*dmt.stateOp("Sz",j);
-	}
+  auto state = InitState(sites);
+  for(auto j : range1(N))
+    {
+      //Alternating up/down spins
+      state.set(j,j%2==1?"Up":"Dn");
+    }
+  auto psi = MPS(state);
+  dmt.fromPureState(psi);
 			   
   //Set up Hamilitonian----------------------------------------------
 
@@ -82,6 +78,7 @@ int main(int argc, char* argv[])
   trott.addNearestNeighbour("Sz", "Sz", Jz);
         
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, args);
+  auto tebdgates = trott.twoSiteGates2ndOrderSweep(CalcTEBDGate(sites), sites, tSweep, args);
   auto hamiltonian = trott.hamiltonian(sites);
 
   dmt.finishConstruction();
@@ -89,8 +86,8 @@ int main(int argc, char* argv[])
 
   //Set up measurements-----------------------------------------------
 
-  std::map<std::string, MatrixReal> data2D;
-  std::map<std::string, VecReal> data;
+  std::map<std::string, MatrixReal> data2D, data2DMPS;
+  std::map<std::string, VecReal> data, dataMPS;
   
   data2D.emplace("Sz", MatrixReal());
   data2D.emplace("SzSzNN", MatrixReal());
@@ -99,9 +96,17 @@ int main(int argc, char* argv[])
   data.emplace("MaxDim", VecReal());
   data.emplace("Energy",VecReal());
   data.emplace("TruncError",VecReal());
+
+  data2DMPS.emplace("Sz", MatrixReal());
+  data2DMPS.emplace("SzSzNN", MatrixReal());
+
+  dataMPS.emplace("t", VecReal());
+  dataMPS.emplace("MaxDim", VecReal());
+  dataMPS.emplace("Energy",VecReal());
+  dataMPS.emplace("TruncError",VecReal());
   
 
-  auto measure = [&](DMT& dmt, Args const & args){
+  auto measureDMT = [&](DMT& dmt, Args const & args){
 		   //Initialise row to store measurements in data2D
 		   for (auto & [key, value] : data2D)
 		     value.push_back(VecReal());
@@ -116,8 +121,24 @@ int main(int argc, char* argv[])
 		   data["TruncError"].push_back(args.getReal("TruncError"));
 		 };
 
+   auto measureMPS = [&](MPS& psi, Args const & args){
+		   //Initialise row to store measurements in data2D
+		   for (auto & [key, value] : data2DMPS)
+		     value.push_back(VecReal());
+		   for(int i = 1; i <= N; i++)
+		     {
+			 data2DMPS["Sz"].back().push_back(calculateExpectation("Sz", i, psi, sites).real());
+			 data2DMPS["SzSzNN"].back().push_back(calculateTwoPoint("Sz", i, "Sz", (i%N)+1, psi, sites).real());
+		     }
+		   dataMPS["t"].push_back(args.getReal("Time"));
+		   dataMPS["MaxDim"].push_back(maxLinkDim(psi));
+		   dataMPS["Energy"].push_back(calculateExpectation(hamiltonian, psi).real());
+		   dataMPS["TruncError"].push_back(args.getReal("TruncError"));
+		 };
+
   
-  DMTObserver obs(measure);
+  DMTObserver obs(measureDMT);
+  TEBDObserver obsMPS(measureMPS);
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   
@@ -131,8 +152,24 @@ int main(int argc, char* argv[])
   printfln("DMT evolution took %f seconds.", timeSpan.count());
   printfln("Maximum MPO bond dimension after time evolution is %d",maxLinkDim(dmt.rho()));
 
+
+  t1 = high_resolution_clock::now();
+  
+  //Time evolve-------------------------------------------------------
+  tebdTEvol(tebdgates, tTotal, tStep, psi, obsMPS, args);
+
+  t2 = high_resolution_clock::now();
+
+  duration<double> timeSpanMPS = duration_cast<duration<double>>(t2 - t1);
+
+  printfln("MPS evolution took %f seconds.", timeSpanMPS.count());
+  printfln("Maximum MPS bond dimension after time evolution is %d",maxLinkDim(psi));
+
   std::map<std::string, double> runInfo = {{"TimeTaken", timeSpan.count()},
 					   {"MaxBondDim", maxLinkDim(dmt.rho())}};
+
+  std::map<std::string, double> runInfoMPS = {{"TimeTaken", timeSpanMPS.count()},
+					   {"MaxBondDim", maxLinkDim(psi)}};
   
   std::string label = outputDir + "/" +outputName; 
 
@@ -140,6 +177,7 @@ int main(int argc, char* argv[])
   std::filesystem::create_directory(outputDir);
 
   writeDataToFile(label, data, data2D, runInfo, inputName);
+  writeDataToFile(label + "_MPS", dataMPS, data2DMPS, runInfoMPS, inputName);
 
   return 0;
 }

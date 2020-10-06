@@ -1,6 +1,7 @@
 #ifndef CALCULATE_OBSERVABLES_H
 #define CALCULATE_OBSERVABLES_H
 
+#include<algorithm>
 #include <itensor/all.h>
 #include "DMT.h"
 
@@ -33,14 +34,22 @@ calculateExpectation( const MPO& op,
 }
 
 //Calculate expectation <(op_name on site i) * (op_name on site j)>
+//If i > j, swaps the terms. If operators on spatially seperated sites
+//do not commute, (i.e. fermions), this swap is important to understand.
 Complex
-calculateTwoPoint(const char * op_name_i, const int& site_i,
-		   const char * op_name_j, const int& site_j,
+calculateTwoPoint(const char * op_name_i, int site_i,
+		   const char * op_name_j, int site_j,
 		      const DMT& dmt){
   if (site_i == site_j)
-    Error("Two-point correlator must be on different sites.");
+    return calculateExpectation((std::string(op_name_i) + "*" + op_name_j).c_str(),
+				site_i, dmt);
+  
   auto op_i = dmt.siteOp(op_name_i, site_i);
-  auto op_j = dmt.siteOp(op_name_j, site_j);  
+  auto op_j = dmt.siteOp(op_name_j, site_j);
+  if (site_i > site_j){
+    std::swap(op_i, op_j);
+    std::swap(site_i, site_j);
+  }
   auto left = dmt.traceLeftOf(site_i)*op_i*dmt.rho(site_i);
   for (int i = site_i +1; i < site_j; i++){
     left *= dmt.traceOf(i);
