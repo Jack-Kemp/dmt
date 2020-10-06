@@ -66,7 +66,7 @@ class ReadData:
     -ReadData["name", 3] returns column 3 (equivalent to ReadData["name_3"])
     -ReadData["name", 2:5] or ReadData["name", 2,3,4] returns matrix of columns 2,3,4.
     """
-    def __init__(self, name):
+    def __init__(self, name, nSitesName='N'):
         self.data = genfromtxt(name, names=True)
         self.args = OrderedDict()
         self.runinfo = OrderedDict()
@@ -76,7 +76,7 @@ class ReadData:
                     _parse_args_line(line[2:], self.runinfo)
                 elif line[0:2] == "#~":
                     _parse_args_line(line[2:], self.args)
-        self.N = self.args["N"]
+        self.N = self.args[nSitesName]
 
     def __getitem__(self, key):
         if not isinstance(key, tuple):
