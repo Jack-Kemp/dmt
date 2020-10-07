@@ -200,7 +200,7 @@ namespace itensor{
 
   template<class Sites>
   ITensor
-  getId(Sites sites, int siteStart, int siteEnd){
+  getId(const Sites & sites, int siteStart, int siteEnd){
       ITensor id = ITensor(1);
       for (int i = siteStart; i<siteEnd; i++)
 	id *= op(sites, "Id", i); 
