@@ -221,7 +221,7 @@ namespace itensor{
 	  Error("Support of preserved operator greater than preserved radius!");
 	}
       if (convertToStateOp)
-	presOps_[support].push_back(dmtSites_->convertToStateOp(presOp, 1, support+1));
+	presOps_[support].push_back(dmtSites_->convertToStateOp(presOp, 1, support));
       else
 	presOps_[support].push_back(presOp);
     }
@@ -282,7 +282,7 @@ namespace itensor{
       MPO ret(mpo);
       for(auto i : range1(length(ret)))
 	{
-	  ret.ref(i) = dmtSites_->convertToSiteOp(ret(i), i, i+1);
+	  ret.ref(i) = dmtSites_->convertToSiteOp(ret(i), i, i);
 	}
       return ret;
     }
@@ -541,8 +541,8 @@ namespace itensor{
       int maxDim =  args.getInt("MaxDim", MAX_DIM);
       
       
-      //Repack the SVD values for "non-truncating" first and third SVDs
-      //The SVD value for the truncating SVD are passed through args.
+      //Repack the SVD arguments for "non-truncating" first and third SVDs
+      //The SVD arguments for the truncating SVD are passed through args.
       auto absolutePresCutoff = args.getBool("AbsolutePresCutoff", true);  
       auto firstCutoff = args.getReal("FirstSVDCutoff",1e-16);
       auto thirdCutoff = args.getReal("ThirdSVDCutoff",1e-16);
