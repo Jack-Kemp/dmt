@@ -38,10 +38,10 @@ namespace itensor {
 	    DMTObserver& obs,
 	    Args args)
   {
-    const bool verbose = args.getBool("Verbose",false);
-    const int maxDim = args.getInt("MaxDim", 0);
+    const bool verbose = args.getBool("Verbose");
+    const int maxDim = args.getInt("MaxDim");
     const int nt = int(ttotal/tstep+(1e-9*(ttotal/tstep)));
-    const int nSweeps = args.getInt("nSweeps", 1);
+    const int nSweeps = args.getInt("nSweeps");
     
     if(fabs(nt*tstep-ttotal) > 1E-9)
       {
@@ -60,7 +60,7 @@ namespace itensor {
       }
     
     dmt.updateTraceCache();
-    dmt.position(gatelist.front().i1());
+    dmt.position(gatelist.front().i1(), args);
     dmt.updateTraceCache();
     
 

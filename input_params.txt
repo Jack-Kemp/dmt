@@ -28,19 +28,19 @@ ThirdSVDCutoff = 1e-10
 AbsoluteCutoff = true
 AbsolutePresCutoff = true
 
-WriteSz = True
-WriteSx = True
-WriteSy = True
-WriteSzSzNN = True
-WriteSxSxNN = True
-WriteSySyNN = True
-WriteEnergyDensity = True
+WriteSz = true
+WriteSx = true
+WriteSy = true
+WriteSzSzNN = false
+WriteSxSxNN = false
+WriteSySyNN = false
+WriteEnergyDensity = true
 
-WriteS2 = True
-WriteTrace = True
-WriteEnergy = True
-WriteMaxDim = True
-WriteTruncErr = True
+WriteS2 = false
+WriteTrace = false
+WriteEnergy = false
+WriteMaxDim = false
+WriteTruncErr = true
 
 SVDMethod = gesdd
 UseSVD = true

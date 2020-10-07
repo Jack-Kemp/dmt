@@ -534,19 +534,19 @@ namespace itensor{
 
 
       //Use SVD or lower accuracy denmatdecomp method.
-      auto useSVD = args.getBool("UseSVD",false);
-      auto useSVDThird =  args.getBool("UseSVDThird",false);
+      auto useSVD = args.getBool("UseSVD");
+      auto useSVDThird =  args.getBool("UseSVDThird");
 
       //Max Bond dimension
-      int maxDim =  args.getInt("MaxDim", MAX_DIM);
+      int maxDim =  args.getInt("MaxDim");
       
       
       //Repack the SVD arguments for "non-truncating" first and third SVDs
       //The SVD arguments for the truncating SVD are passed through args.
-      auto absolutePresCutoff = args.getBool("AbsolutePresCutoff", true);  
-      auto firstCutoff = args.getReal("FirstSVDCutoff",1e-16);
-      auto thirdCutoff = args.getReal("ThirdSVDCutoff",1e-16);
-      auto svdMethod = args.getString("SVDMethod", "gesdd");
+      auto absolutePresCutoff = args.getBool("AbsolutePresCutoff");  
+      auto firstCutoff = args.getReal("FirstSVDCutoff");
+      auto thirdCutoff = args.getReal("ThirdSVDCutoff");
+      auto svdMethod = args.getString("SVDMethod");
       args.add("SVDMethod", svdMethod);
       auto firstSVDArgs = Args{"Truncate", true, "Cutoff=",firstCutoff,
 			       "AbsoluteCutoff", absolutePresCutoff, "SVDMethod", svdMethod};
@@ -711,7 +711,7 @@ namespace itensor{
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
-	      if(args.getBool("DoNormalize",false))
+	      if(args.getBool("DoNormalize"))
 		{
 		  Dv *= 1./itensor::norm(Dv);
 		}
@@ -730,7 +730,7 @@ namespace itensor{
 	      rho_.ref(b) *= Av;
 	      rho_.ref(b+1) *= Bv;
 	      //Normalize the ortho center if requested
-	      if(args.getBool("DoNormalize",false))
+	      if(args.getBool("DoNormalize"))
 		{
 		  ITensor& oc = (dir == Fromleft ? rho_.ref(b+1) : rho_.ref(b));
 		  auto nrm = itensor::norm(oc);
@@ -866,10 +866,10 @@ namespace itensor{
     //below.
     
     DMT(SiteSet sites, std::vector<std::string> vecBasis, Args const & args = Args::global()) {
-      hermitianBasis_ = args.getBool("HermitianBasis", false);
-      vectorBasis_ = hermitianBasis_ or args.getBool("Vectorize", false);
-      presRadius_ = args.getInt("PresRadius", 1);
-      cacheTrace_ = args.getBool("CacheTrace", true);
+      hermitianBasis_ = args.getBool("HermitianBasis");
+      vectorBasis_ = hermitianBasis_ or args.getBool("Vectorize");
+      presRadius_ = args.getInt("PresRadius");
+      cacheTrace_ = args.getBool("CacheTrace");
       
       if(vectorBasis_)
 	dmtSites_ = std::make_unique<VecSiteSet>(sites, vecBasis, args);
