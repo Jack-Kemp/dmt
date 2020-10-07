@@ -20,6 +20,24 @@ calculateExpectation( const char * op_name, const int& site_i,
   return eltC(exp)/dmt.trace();
 }
 
+
+
+//Calculate expectation of ITensor op with support from [siteStart,siteEnd].
+//Caps interval to DMT sites.
+//Assumed op is in DMT basis already.
+Complex
+calculateExpectation( const ITensor & op, int siteStart,
+		      int siteEnd,
+		      const DMT& dmt){
+  siteStart = std::max(siteStart, 1);
+  siteEnd = std::min(siteEnd, dmt.len());
+  auto left = dmt.traceLeftOf(siteStart);
+  for (int i = siteStart; i <= siteEnd; i++)
+    left*=dmt.rho(i);
+  left*=op;
+  return eltC(left*dmt.traceRightOf(siteEnd))/dmt.trace();
+}
+
 //Calculate expectation of MPO op.
 
 //As part of the calculation this must be converted to DMT basis,
@@ -64,6 +82,8 @@ calculateTwoPoint(const char * op_name_i, int site_i,
 //not traced out is large this will be very LARGE.
 ITensor
 reducedDensityMatrix(const DMT& dmt, int siteStart, int siteEnd){
+  siteStart = std::max(siteStart, 0);
+  siteEnd = std::min(siteEnd, dmt.len());
   auto left = dmt.traceLeftOf(siteStart);
   auto right = dmt.traceRightOf(siteEnd);
   for (int i = siteStart; i <= siteEnd; i++){

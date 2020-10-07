@@ -349,6 +349,44 @@ twoSiteGates2ndOrderSweep(const CalcGateClass & calc,
       }
     return toMPO(H);
   }
+
+
+  //Find the sum of the terms of the Hamiltonian soley
+  //supported around site site_i, i.e site_i - maxRange to site_i + maxRange.
+template<class Sites>
+ITensor localEnergyDensity(int site_i, const Sites & sites){
+  int start = std::max(site_i-maxRange_,1);
+  int end = std::min(site_i+maxRange_, length(sites));
+
+  auto hterm = ITensor(getId(sites, start,end+1).inds());
+  for (int b = start; b <= end; ++b)
+    {
+      for (const auto& [opnames, cvals] : singleSite_)
+	{
+	  hterm += cvals(b)*getId(sites, start, b)*op(sites, opnames[0], b)*getId(sites, b+1, end+1);
+	}
+      if(b <= end - 1)
+	{
+	for (const auto& [opnames, cvals] : nearestNeighbour_)
+	  {
+	    hterm += cvals(b)*getId(sites, start, b)*op(sites, opnames[0], b)
+	      *op(sites, opnames[1], b+1)*getId(sites, b+2, end+1);
+	  }
+	for (int sep = 2; sep <= std::min(end-sep, maxRange_); sep++)
+	  {
+	  auto couplings = longRange_.find(sep);
+	  if (couplings != longRange_.end())
+	    for (const auto& [opnames, cvals] : couplings->second)
+	      {
+		hterm += cvals(b)*getId(sites, start, b)*op(sites, opnames[0], b)
+		  *getId(sites, b+1, b+sep)*op(sites, opnames[1], b+sep)
+		  *getId(sites, b+sep+1, end+1);
+	      }
+	  }
+	}
+    }
+    return hterm;
+  }
     
 
   //EXPERIMENTAL Find the sum of the terms of the Hamiltonian soley

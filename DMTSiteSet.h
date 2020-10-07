@@ -178,16 +178,16 @@ namespace itensor
        
   public:
 
-    StrVec vecOpNames() const {return vecOpNames_;}
-    IndexSet vecInds() const {return vecInds_;}
-    Index vecInd(const int & site_i) const {return vecInds_[site_i-1];}
-    const std::vector<ITensor> & vecCombs () const {return vecCombs_;}
-    ITensor vecComb(const int & site_i) const {return vecCombs_[site_i-1];}
-    bool isVectorBasis() const {return true;}
-     bool isHermitianBasis() const { return hermitianBasis_;}
+    StrVec vecOpNames() const override {return vecOpNames_;}
+    IndexSet vecInds() const override {return vecInds_;}
+    Index vecInd(const int & site_i) const override {return vecInds_[site_i-1];}
+    const std::vector<ITensor> & vecCombs () const override {return vecCombs_;}
+    ITensor vecComb(const int & site_i) const override {return vecCombs_[site_i-1];}
+    bool isVectorBasis() const override {return true;}
+     bool isHermitianBasis() const override { return hermitianBasis_;}
     
     
-    ITensor basisChange(const int & site_i) const {
+    ITensor basisChange(const int & site_i) const override {
       return site_i == 1 or not changeBasis_ ?
 	basisChange_  :
 	basisChange_*delta(dagt_,dag(vecInds_[site_i-1]))
@@ -220,10 +220,10 @@ namespace itensor
 
 
     ITensor
-    convertToSiteOp(const ITensor & ten, int start, int end)
+    convertToSiteOp(const ITensor & ten, int start, int end) override
     {
       auto ret = ten;
-      for (int i = start; i < end; ++i)
+      for (int i = start; i <= end; ++i)
 	{
 	  ret *= vecComb(i);
 	  ret *= conj(basisChange(i));
@@ -234,10 +234,10 @@ namespace itensor
     }
 
     ITensor
-    convertToStateOp(const ITensor & ten, int start, int end)
+    convertToStateOp(const ITensor & ten, int start, int end) override
     {
       auto ret = swapPrime(ten,0,1,"Site");
-      for (int i = start; i < end; ++i)
+      for (int i = start; i <= end; ++i)
 	{
 	  ret *= vecComb(i);
 	  ret *= basisChange(i);
@@ -249,7 +249,7 @@ namespace itensor
 
     
     ITensor
-    op(std::string const& opname, int i, Args const& args = Args::global()) const
+    op(std::string const& opname, int i, Args const& args = Args::global()) const override
     {
       auto it = vecOps_.find(opname);
       return it != vecOps_.end() ?
@@ -259,7 +259,7 @@ namespace itensor
 
 
     ITensor
-    stateOp(std::string const& opname, int i, Args const& args = Args::global()) const
+    stateOp(std::string const& opname, int i, Args const& args = Args::global()) const override
     {
       //Either find the Op in list of basis names or construct manually from bare Op.
       auto it = stateOps_.find(opname);
@@ -290,7 +290,7 @@ bareOp(DMTSiteSet const& sites,
     return sites.bareOp(opname,i,args);
     }
 
-  int inline length(VecSiteSet const & sites) {return sites.length();}
+  int inline length(DMTSiteSet const & sites) {return sites.length();}
 
   
 }

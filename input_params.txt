@@ -1,10 +1,10 @@
 input
 {
 OutputDir = reformattest
-OutputName = rt2
+OutputName = rt3
 Verbose = true
 
-N = 3
+N = 20
 Jx = 1.0
 Jy = 1.0
 Jz = 1.0
@@ -28,16 +28,18 @@ ThirdSVDCutoff = 1e-10
 AbsoluteCutoff = true
 AbsolutePresCutoff = true
 
-WriteMagz = true
-WriteMagx = true
-WriteMagy = true
-WriteCorrzz = true
-WriteCorrxx = true
-WriteCorryy = true
-WriteS2 = true
-WriteMaxDim = true
-WriteTrace = true
-WriteEnergy = true
+WriteSz = true
+WriteSx = true
+WriteSy = true
+WriteSzSzNN = false
+WriteSxSxNN = false
+WriteSySyNN = false
+WriteEnergyDensity = true
+
+WriteS2 = false
+WriteTrace = false
+WriteEnergy = false
+WriteMaxDim = false
 WriteTruncErr = true
 
 SVDMethod = gesdd

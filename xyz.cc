@@ -1,16 +1,11 @@
 #if 1
-#include "inputOutputUtilities.h"
-#include "calculateObservables.h"
-#include "DMT.h"
-#include "DMTObserver.h"
-#include "gateTevol.h"
 #include "itensor/all.h"
 #include <itensor/mps/bondgate.h>
 #include<chrono>
+#include<limits>
 #include<functional>
 #include<filesystem>
-#include"TrotterConstructor.h"
-#include "ArgInput.h"
+#include "allDMT.h"
 
 using namespace itensor;
 using std::vector;
@@ -133,6 +128,14 @@ int main(int argc, char* argv[])
   
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, {"Verbose", true});
   auto hamiltonian = trott.hamiltonian(sites);
+  auto maxRange = trott.maxRange();
+
+  std::vector<ITensor> localEnergyDensity;
+  if (input.getYesNo("WriteEnergyDensity", false))
+    for(int i=1; i<=N; ++i)
+      localEnergyDensity.push_back(trott.localEnergyDensity(i, dmt.dmtSites()));
+
+  
 
   //Set preserved operators and finish DMT set-up.
 
@@ -154,7 +157,8 @@ int main(int argc, char* argv[])
 		  "Sy",
 		  "SzSzNN",
 		  "SxSxNN",
-		  "SySyNN"
+		  "SySyNN",
+		  "EnergyDensity"
   };
 
   VecStr dataNames = {"S2",
@@ -173,37 +177,38 @@ int main(int argc, char* argv[])
   data.emplace("t", VecReal());
 
   auto measure = [&](DMT& dmt, Args const & args){
-		   Real ret;
 		   for (auto & [key, value] : data2D)
 		     value.push_back(VecReal());
 		   for(int i = 1; i <= N; i++)
 		     {
-		       
 		       for (auto & [key, value] : data2D)
 			 {
-			 switch( hash(key.c_str()) ){
-			 case "Sz"_: ret  = calculateExpectation("Sz", i, dmt).real(); break;
-			 case "Sx"_: ret  = calculateExpectation("Sx", i, dmt).real(); break;
-			 case "Sy"_: ret  = calculateExpectation("Sy", i, dmt).real(); break;
-			 case "SzSzNN"_: ret  = calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real(); break;
-			 case "SxSxNN"_: ret  = calculateTwoPoint("Sx", i, "Sx", (i%N)+1, dmt).real(); break;
-			 case "SySyNN"_: ret  = calculateTwoPoint("Sy", i, "Sy", (i%N)+1, dmt).real(); break;
-			 }
-			 value.back().push_back(ret);
+			   Real ret = std::numeric_limits<Real>::quiet_NaN();
+			   switch( hash(key.c_str()) ){
+			   case "Sz"_: ret  = calculateExpectation("Sz", i, dmt).real(); break;
+			   case "Sx"_: ret  = calculateExpectation("Sx", i, dmt).real(); break;
+			   case "Sy"_: ret  = calculateExpectation("Sy", i, dmt).real(); break;
+			   case "SzSzNN"_: ret  = calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real(); break;
+			   case "SxSxNN"_: ret  = calculateTwoPoint("Sx", i, "Sx", (i%N)+1, dmt).real(); break;
+			   case "SySyNN"_: ret  = calculateTwoPoint("Sy", i, "Sy", (i%N)+1, dmt).real(); break;
+			   case "EnergyDensity"_: ret  = calculateExpectation(localEnergyDensity[i-1], i-maxRange, i+maxRange, dmt).real(); break;  
+			   }
+			   value.back().push_back(ret);
 			 }
 		     }
 		   for (auto & [key, value] : data)
-			 {
-			   switch( hash(key.c_str()) ){
-			   case "S2"_: ret  = secondRenyiEntropyHalfSystem(dmt); break;
-			   case "MaxDim"_: ret = maxLinkDim(dmt.rho()); break;
-			   case "Trace"_: ret = dmt.trace(); break;
-			   case "Energy"_: ret = calculateExpectation(hamiltonian, dmt).real(); break;
-			   case "t"_: ret = args.getReal("Time");
-			   case "TruncErr"_: ret = args.getReal("TruncError");
-			   }
-			   value.push_back(ret);
-			 }
+		     {
+		       Real ret = std::numeric_limits<Real>::quiet_NaN();
+		       switch( hash(key.c_str()) ){
+		       case "S2"_: ret  = secondRenyiEntropyHalfSystem(dmt); break;
+		       case "MaxDim"_: ret = maxLinkDim(dmt.rho()); break;
+		       case "Trace"_: ret = dmt.trace(); break;
+		       case "Energy"_: ret = calculateExpectation(hamiltonian, dmt).real(); break;
+		       case "t"_: ret = args.getReal("Time"); break;
+		       case "TruncErr"_: ret = args.getReal("TruncError"); break;
+		       }
+		       value.push_back(ret);
+		     }
 		 };
 
   
