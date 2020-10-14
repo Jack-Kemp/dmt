@@ -1,0 +1,51 @@
+input
+{
+OutputDir = out
+OutputName = xyzLadderRung
+Verbose = true
+
+L = 16
+Jlx = 1.0
+Jly = 1.0
+Jlz = 1.0
+Jrx = 1.0
+Jry = 1.0
+Jrz = 1.0
+eta = 0.1
+
+rlRatio = 1.0
+
+tStep = 1.0
+tTotal = 15.0
+nSweeps = 4
+PresRadius = 1
+
+MaxDim = 64
+Cutoff = 1e-16
+FirstSVDCutoff = 1e-16
+ThirdSVDCutoff = 1e-10
+AbsoluteCutoff = true
+AbsolutePresCutoff = true
+
+WriteSx = true
+WriteSy = true
+WriteSz = true
+WriteSzMidSz = true
+WriteSxMidSx = true
+WriteSyMidSy = true
+WriteEnergyDensity = true
+
+WriteSxU = true
+WriteSyU = true
+WriteSzU = true
+
+WriteSxL = true
+WriteSyL = true
+WriteSzL = true
+
+WriteS2 = false
+WriteMaxDim = false
+WriteTrace = false
+WriteEnergy = false
+WriteTruncErr = true
+}

@@ -372,7 +372,7 @@ ITensor localEnergyDensity(int site_i, const Sites & sites){
 	    hterm += cvals(b)*getId(sites, start, b)*op(sites, opnames[0], b)
 	      *op(sites, opnames[1], b+1)*getId(sites, b+2, end+1);
 	  }
-	for (int sep = 2; sep <= std::min(end-sep, maxRange_); sep++)
+	for (int sep = 2; sep <= std::min(end-b, maxRange_); sep++)
 	  {
 	  auto couplings = longRange_.find(sep);
 	  if (couplings != longRange_.end())
