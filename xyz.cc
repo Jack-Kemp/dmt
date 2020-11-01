@@ -130,12 +130,14 @@ int main(int argc, char* argv[])
   auto hamiltonian = trott.hamiltonian(sites);
   auto maxRange = trott.maxRange();
 
-  std::vector<ITensor> localEnergyDensity;
+  std::vector<ITensor> localEnergyDensity, HSzComm;
   if (input.getYesNo("WriteEnergyDensity", false))
     for(int i=1; i<=N; ++i)
       localEnergyDensity.push_back(trott.localEnergyDensity(i, dmt.dmtSites()));
 
-  
+   if (input.getYesNo("WriteHSzComm", false))
+    for(int i=1; i<=N; ++i)
+      HSzComm.push_back(dmt.convertToSiteOp(trott.commuteWithSingleSite(i, "Sz", sites), i- maxRange, i+maxRange)); 
 
   //Set preserved operators and finish DMT set-up.
 
@@ -158,7 +160,9 @@ int main(int argc, char* argv[])
 		  "SzSzNN",
 		  "SxSxNN",
 		  "SySyNN",
-		  "EnergyDensity"
+		  "EnergyDensity",
+		  "HSzComm",
+		  "SpinCurrent"
   };
 
   VecStr dataNames = {"S2",
@@ -191,7 +195,9 @@ int main(int argc, char* argv[])
 			   case "SzSzNN"_: ret  = calculateTwoPoint("Sz", i, "Sz", (i%N)+1, dmt).real(); break;
 			   case "SxSxNN"_: ret  = calculateTwoPoint("Sx", i, "Sx", (i%N)+1, dmt).real(); break;
 			   case "SySyNN"_: ret  = calculateTwoPoint("Sy", i, "Sy", (i%N)+1, dmt).real(); break;
-			   case "EnergyDensity"_: ret  = calculateExpectation(localEnergyDensity[i-1], i-maxRange, i+maxRange, dmt).real(); break;  
+			   case "EnergyDensity"_: ret  = calculateExpectation(localEnergyDensity[i-1], i-maxRange, i+maxRange, dmt).real(); break;
+			   case "HSzComm"_: ret  = calculateExpectation(HSzComm[i-1], i-maxRange, i+maxRange, dmt).real(); break;
+			   case "SpinCurrent"_: ret =  calculateTwoPoint("Sx", i, "Sy", (i%N)+1, dmt).real() - calculateTwoPoint("Sy", i, "Sx", (i%N)+1, dmt).real(); break;
 			   }
 			   value.back().push_back(ret);
 			 }

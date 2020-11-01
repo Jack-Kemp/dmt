@@ -223,13 +223,17 @@ namespace itensor
     convertToSiteOp(const ITensor & ten, int start, int end) override
     {
       auto ret = ten;
-      for (int i = start; i <= end; ++i)
+      for (int i = std::max(start,1); i <= std::min(end, this->length()); ++i)
 	{
 	  ret *= vecComb(i);
 	  ret *= conj(basisChange(i));
 	  }
-      if(hermitianBasis_)
+      if(hermitianBasis_){
+	Real imagNorm = norm(imagPart(ret));
+	if (imagNorm > 1e-12)
+	    Error("Hermitian Basis but operator with AH part!");
 	ret = realPart(ret);
+      }
       return noPrime(ret, "Site");
     }
 
