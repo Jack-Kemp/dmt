@@ -1,11 +1,10 @@
 #if 1
+#include "allDMT.h"
 #include "itensor/all.h"
-#include <itensor/mps/bondgate.h>
+
 #include<chrono>
-#include<limits>
 #include<functional>
 #include<filesystem>
-#include "allDMT.h"
 
 using namespace itensor;
 using std::vector;
@@ -26,7 +25,7 @@ int main(int argc, char* argv[])
   }
   else{ 
     printfln("Using default params.");
-    inputName = "input_params.txt";
+    inputName = "xyzAdvanced_input_params.txt";
   }
   
   auto input = InputGroup(inputName,"input");
@@ -49,28 +48,18 @@ int main(int argc, char* argv[])
   Real J2x = input.getReal("J2x");
   Real J2y = input.getReal("J2y");
   Real J2z = input.getReal("J2z");
-  Real delta = 0.5*Jx;
-
-  const bool conserveQNs = args.getBool("ConserveQNs");
   
   auto outputDir = args.getString("OutputDir");
   std::filesystem::create_directory(outputDir);
   auto outputName = args.getString("OutputName");
   auto checkpointName = args.getString("CheckpointName");
 
-  //Sanity check conservation
-  if (conserveQNs)
-    if( hx != 0 or hy != 0 or (Jx != Jy))
-      Error("Hamiltionian does not conserve Z. Check hx,hy = 0 and Jx = Jy");
-
   //End input-output options -----------------------------------------
 
  
   //Set up physical basis and initial state---------------------------
-
-
   
-  auto sites = SpinHalf(N, {"ConserveQNs=", conserveQNs});
+  auto sites = SpinHalf(N, args);
   std::vector<std::string> vectorBasis = {"Id", "Sx", "Sy", "Sz"};
 
   std::string checkDMTName;
@@ -129,18 +118,10 @@ int main(int argc, char* argv[])
   trott.addNearestNeighbour("Sz", "Sz", Jz);
   trott.addSingleSite("Sz", hz);
   
-  if(conserveQNs)
-    {
-      trott.addNearestNeighbour("S+","S-", delta);
-      trott.addNearestNeighbour("S-","S+", delta);
-    }
-  else
-    {
-      trott.addSingleSite("Sx", hx);
-      trott.addSingleSite("Sy", hy);
-      trott.addNearestNeighbour("Sx","Sx", Jx);
-      trott.addNearestNeighbour("Sy","Sy", Jy);
-    }
+  trott.addSingleSite("Sx", hx);
+  trott.addSingleSite("Sy", hy);
+  trott.addNearestNeighbour("Sx","Sx", Jx);
+  trott.addNearestNeighbour("Sy","Sy", Jy);
 
   if(input.getYesNo("NextNearest"))
     {
@@ -162,11 +143,6 @@ int main(int argc, char* argv[])
    if (input.getYesNo("WriteHSzComm", false))
     for(int i=1; i<=N; ++i)
       HSzComm.push_back(dmt.convertToSiteOp(trott.commuteWithSingleSite(i, "Sz", sites), i- maxRange, i+maxRange)); 
-
-  //Set preserved operators and finish DMT set-up.
-
-  if(input.getYesNo("OnlyPreserveEnergyDensity"))
-    dmt.addPresOperator(trott.localEnergyDensity(sites), trott.maxRange()+1, true);
 
   dmt.finishConstruction();
   

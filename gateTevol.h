@@ -64,7 +64,7 @@ namespace itensor {
     dmt.updateTraceCache();
     
 
-    Real tsofar = 0;
+    Real tsofar = args.getReal("tStart");
     Real truncerr = 0;
     Spectrum spec;
     
