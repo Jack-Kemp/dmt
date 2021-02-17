@@ -9,12 +9,50 @@
 #include<map>
 #include<functional>
 #include<vector>
+#include<filesystem>
 
 template<class A>
 std::string to_string_sstream(const A& num){	
   std::ostringstream streamObj;
   streamObj << num;
   return streamObj.str();
+}
+
+
+bool findCheckpointFile(std::string checkpointName,
+			std::string dir,
+			std::string ext,
+			double& tStart,
+			std::string& checkDMTName)
+{
+  std::string checkPath;
+  bool found = false;
+  uint clen = checkpointName.size();
+  uint elen = ext.size();
+  for (const auto & entry : std::filesystem::directory_iterator(dir))
+	{
+	  auto path = entry.path().filename().string();
+	  if (path.substr(0, clen) == checkpointName
+	      and path.substr(path.size()-elen, 4) == ext)
+	    {
+	      if (path.substr(clen, 3) != "_t_")
+		{
+		std::cout<<"Checkpoint name match, but no time '_t_' suffix; ignoring."
+			 << std::endl;
+		}
+	      else
+		{
+		  found = true;
+		  auto tCheck = std::stod(path.substr(clen+3, path.size()-clen-elen-3));
+		  if (tCheck > tStart)
+		    {
+		      tStart = tCheck;
+		      checkDMTName = dir + '/' + path;
+		    }
+		}
+	    }
+	}
+  return found;
 }
 
 //Writes square data tabulated space delimited to a file, with column

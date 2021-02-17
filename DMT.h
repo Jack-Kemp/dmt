@@ -835,6 +835,25 @@ namespace itensor{
 	rho_.ref(i) *= dmtSites_->vecComb(i);
     }
 
+    void
+    writeToFile(std::string filename)
+    {
+      itensor::writeToFile(filename+".sites", sites());
+      itensor::writeToFile(filename, rho_);
+    }
+
+    void
+    readFromFile(std::string filename)
+    {
+      itensor::readFromFile(filename, rho_);
+      if (vectorBasis_)
+	{
+	  for (auto n : range1(length(rho_)))
+	    rho_.ref(n).replaceInds({itensor::siteInds(rho_,n)},
+				    {dmtSites_->vecInd(n)});
+	}
+      hasLinks_ = true;
+    }
 
     //Initialise density matrix as projector onto pure state |psi>
      void

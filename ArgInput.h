@@ -16,13 +16,16 @@ Args readInMandatoryArgs(InputGroup & input){
 
   std::vector<std::string> mandParamsReal = {"tStep", "tTotal"};
   std::vector<std::string> mandParamsInt = {"nSweeps", "MaxDim"};
+  std::vector<std::string> mandParamsString = {"OutputName"};
   
   
   
   
   std::map<std::string, Real> defParamsReal = { {"Cutoff", 1e-16},
-  					     {"FirstSVDCutoff", 1e-16},
-  					     {"ThirdSVDCutoff", 1e-10}
+						{"FirstSVDCutoff", 1e-16},
+						{"ThirdSVDCutoff", 1e-10},
+						{"CheckpointTime", 10.0},
+						{"tStart", 0}
   					     };
   
   std::map<std::string, int> defParamsInt = { {"PresRadius", 1} };
@@ -39,17 +42,24 @@ Args readInMandatoryArgs(InputGroup & input){
   					    { "AbsoluteCutoff", true},
   					    { "AbsolutePresCutoff", true},
   					    { "Verbose", true},
+					    { "Checkpoint", false},
 					    { "FromPureState", false},
 					    { "ConserveQNs", false} 
   };
 
-  std::map<std::string, std::string> defParamsString = {{"SVDMethod", "gesdd"}};
+  std::map<std::string, std::string> defParamsString = {
+							{"SVDMethod", "gesdd"},
+							{"OutputDir", "./"},
+							{"CheckpointName", "OutputName"}
+  };
 
 
   for(auto const& k : mandParamsReal)
     args.add(k, input.getReal(k));
   for(auto const& k : mandParamsInt)
     args.add(k, input.getInt(k));
+  for(auto const& k : mandParamsString)
+    args.add(k, input.getString(k));
   
   for(auto const& [k,v] : defParamsReal)
     args.add(k, input.getReal(k,v));
@@ -60,7 +70,10 @@ Args readInMandatoryArgs(InputGroup & input){
   for(auto const& [k,v] : defParamsString)
     args.add(k, input.getString(k,v));
 
-   return args;
+  if(args.getString("CheckpointName") == "OutputName")
+    args.add("CheckpointName", args.getString("OutputName"));
+
+  return args;
 
  }
 #endif
