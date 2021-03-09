@@ -152,6 +152,34 @@ int main(int argc, char* argv[])
   
   auto dmtgates = trott.twoSiteGates2ndOrderSweep(dmt, sites, tSweep, {"Verbose", true});
   auto hamiltonian = trott.hamiltonian(sites);
+
+  auto aH3 = AutoMPO(sites);
+  for (int b = 1; b < N -1; ++b)
+    {
+	  aH3 += Jz, "Sx", b, "Sy", b+1, "Sz", b+2;
+	  aH3 += -Jz, "Sy", b, "Sx", b+1, "Sz", b+2;
+	  aH3 += Jz, "Sz", b, "Sx", b+1, "Sy", b+2;
+	  aH3 += -Jz, "Sz", b, "Sy", b+1, "Sx", b+2;
+	  aH3 += Jx, "Sx", b, "Sz", b+1, "Sy", b+2;
+	  aH3 += -Jx, "Sy", b, "Sz", b+1, "Sx", b+2;	
+    }
+
+  auto H3 = toMPO(aH3);
+
+  // auto aH4 = AutoMPO(sites);
+  //  for (int b = 1; b < N -1; ++b)
+  //    {
+  //  	  aH4 += Jz, "Sx", b, "Sy", b+1, "Sz", b+2;
+  //  	  aH4 += -Jz, "Sy", b, "Sx", b+1, "Sz", b+2;
+  //  	  aH4 += Jz, "Sz", b, "Sx", b+1, "Sy", b+2;
+  // 	  aH4 += -Jz, "Sz", b, "Sy", b+1, "Sx", b+2;
+  //  	  aH4 += Jx, "Sx", b, "Sz", b+1, "Sy", b+2;
+  //  	  aH4 += -Jx, "Sy", b, "Sz", b+1, "Sx", b+2;	
+  //    }
+
+  //auto H4 = toMPO(aH4);
+
+  
   auto maxRange = trott.maxRange();
 
   std::vector<ITensor> localEnergyDensity, HSzComm;
@@ -192,6 +220,7 @@ int main(int argc, char* argv[])
   VecStr dataNames = {"S2",
 		  "Trace",
 		  "Energy",
+		      "H3",
 		  "MaxDim",
 		  "TruncErr"
   };
@@ -234,6 +263,7 @@ int main(int argc, char* argv[])
 		       case "MaxDim"_: ret = maxLinkDim(dmt.rho()); break;
 		       case "Trace"_: ret = dmt.trace(); break;
 		       case "Energy"_: ret = calculateExpectation(hamiltonian, dmt).real(); break;
+		       case "H3"_: ret = calculateExpectation(H3, dmt).real(); break;
 		       case "t"_: ret = args.getReal("Time"); break;
 		       case "TruncErr"_: ret = args.getReal("TruncError"); break;
 		       }
