@@ -1,10 +1,10 @@
 input
 {
 OutputDir = out
-OutputName = xyzAdvanced
+OutputName = H3L20x128fine
 Verbose = true
 
-N = 50
+N = 20
 Jx = 1.0
 Jy = 1.0
 Jz = 1.0
@@ -16,12 +16,12 @@ hx = 0.0
 hy = 0.0
 hz = 0.0
 
-tStep = 1.0
-tTotal = 15.0
+tStep = 0.5
+tTotal = 50.0
 nSweeps = 4
 PresRadius = 1
 
-MaxDim = 64
+MaxDim = 128
 Cutoff = 1e-16
 FirstSVDCutoff = 1e-16
 ThirdSVDCutoff = 1e-10
@@ -29,26 +29,27 @@ AbsoluteCutoff = true
 AbsolutePresCutoff = true
 
 WriteSz = true
-WriteSx = true
-WriteSy = true
+WriteSx = false
+WriteSy = false
 WriteSzSzNN = false
 WriteSxSxNN = false
 WriteSySyNN = false
-WriteEnergyDensity = true
-WriteHSzComm = true
-WriteSpinCurrent = true
+WriteEnergyDensity = false
+WriteHSzComm = false
+WriteSpinCurrent = false
 
 WriteS2 = false
 WriteTrace = false
-WriteEnergy = false
+WriteEnergy = true
+WriteH3 = true
 WriteMaxDim = false
 WriteTruncErr = true
 
-SVDMethod = gesdd
+SVDMethod = gesvd
 UseSVD = true
 UseSVDThird = true
 
-Checkpoint = true
+Checkpoint = false
 CheckpointTime = 0.1
 CheckpointName = checkpoint
 

@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from numpy import genfromtxt
+from numpy import genfromtxt, savetxt
 from numpy.lib.recfunctions import structured_to_unstructured
 
 
@@ -13,7 +13,8 @@ def _read_args_line(line, args):
 
 def _parse_args_line(line, args):
     """Helper function for read_args. Parses a single line, that is,
-    does its best to convert value to python variable rather than string."""
+    does its best to convert value to python variable rather than string.
+    """
     try:
         k, v = line.split('=')
         v = v.strip()
@@ -57,6 +58,16 @@ def write_args(args, output):
             f.write(k + " = " +  str(v) + "\n")
         f.write("\n}")
 
+def append_args(args, output, prefix='', input_header=True):
+    """Write input parameters from OrderedDict to output file output."""
+    with open(output, 'a') as f:
+        if input_header:
+            f.write(prefix+"input\n{\n")
+        for k, v in args.items():
+            f.write(prefix+k + " = " +  str(v) + "\n")
+        if input_header:
+            f.write(prefix+"\n}")
+
 
 class ReadData:
     """Read in data with ReadData(name). Gets data, input parameters and
@@ -98,3 +109,10 @@ class ReadData:
             if isinstance(key[-1], slice):
                 return structured_to_unstructured(self.data[[key[0]+ "_" + str(i) for i in range(*key[-1].indices(self.N))]])
             return self.data[key]
+
+
+def writeData(name, rdata):
+    cnames = rdata.data.dtype.names
+    savetxt(name, rdata.data, header = ' '.join(cnames))
+    append_args(rdata.runinfo, name, prefix='#:', input_header=False)
+    append_args(rdata.args, name, prefix='#~')
