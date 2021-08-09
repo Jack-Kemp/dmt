@@ -4,8 +4,13 @@ import numpy as np
 import glob
 
 def main(argv):
+    """Takes a template filename of the form "checkpoint_t_*.dat", which
+    represents a set of checkpoint output data from DMT, and combines all
+    the unique data into one data file with continous time series, in case
+    of restarts. The output file is "template_file_name + _globed".
+    """
     if len(argv) != 2:
-        print("usage slice.py name, will use first *")
+        print("usage check_point_glob.py name, will use first * in file name.")
         sys.exit(2)
     name = argv[1]
     datafs = glob.glob(name)
@@ -16,9 +21,10 @@ def main(argv):
     Tind = name.split('_').index('*')
     T = np.array([float(f.split('_')[Tind][:datsuffix]) for f in datafs])
     T, datafs = (list(x) for x in zip(*sorted(zip(T, datafs))))
-    dfret = ReadData(datafs[-1])
+    ind = len(datafs)-1
+    dfret = ReadData(datafs[ind])
     Tstart = dfret["t"][0]
-    while Tstart > 0:
+    while Tstart > 0 and ind > 0:
         print(Tstart)
         ind = np.searchsorted(T, Tstart)
         print(ind)
