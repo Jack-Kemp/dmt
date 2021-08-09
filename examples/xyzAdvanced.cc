@@ -62,6 +62,8 @@ int main(int argc, char* argv[])
   auto sites = SpinHalf(N, args);
   std::vector<std::string> vectorBasis = {"Id", "Sx", "Sy", "Sz"};
 
+  //If checkpointing enabled, first look for an existing to checkpoint
+  //to load from and set tStart and density matrix appropriately.
   std::string checkDMTName;
   bool loadFromCheckpoint = false;
   if(args.getBool("Checkpoint") and
@@ -180,6 +182,7 @@ int main(int argc, char* argv[])
       data.emplace(name, VecReal());
   data.emplace("t", VecReal());
 
+  //This "measure" function will be called at the end of every sweep.
   auto measure = [&](DMT& dmt, Args const & args){
 		   for (auto & [key, value] : data2D)
 		     value.push_back(VecReal());
@@ -222,6 +225,9 @@ int main(int argc, char* argv[])
 
   //Set up checkpointing-----------------------------------------------------
 
+  //This function will be called every CheckpointTime *hours* in real time.
+  //We save the density matrix and output data to filename CheckpointName_t_.(dmt/dat).
+  //Default CheckpointName = OutputName.
   auto write_checkpoint = [&](DMT& dmt, Args const & args){
 			    std::map<std::string, double> runInfo = {{"TimeTaken", args.getReal("WallTime")},
 								     {"MaxBondDim", maxLinkDim(dmt.rho())}};

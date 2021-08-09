@@ -19,6 +19,10 @@ std::string to_string_sstream(const A& num){
 }
 
 
+//Looks for file name of form checkpointName + "_t_" + string of time
+//number + any possible file extension, for example "checkpoint_t_19.5.dat".
+//Returns true if found, and extracts the time to tStart and the file name
+//including path to checkDMTname. Else returns false.
 bool findCheckpointFile(std::string checkpointName,
 			std::string dir,
 			std::string ext,

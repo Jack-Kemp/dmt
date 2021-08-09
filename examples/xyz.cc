@@ -101,6 +101,7 @@ int main(int argc, char* argv[])
   data.emplace("TruncError",VecReal());
   
 
+  //This "measure" function will be called at the end of every sweep.
   auto measure = [&](DMT& dmt, Args const & args){
 		   //Initialise row to store measurements in data2D
 		   for (auto & [key, value] : data2D)
