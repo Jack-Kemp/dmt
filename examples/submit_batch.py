@@ -57,15 +57,15 @@ with the remainder (which will by definition have less work than the rest).
 
     step = (end-begin)/(npoint-1)
     nperinterval = npoint//nproc
-    endnperinterval = npoint-nproc*npoint
+    endnperinterval = npoint-nproc*nperinterval
     if endnperinterval > 0:
         nproc = nproc +1
     pidstring = str(os.getpid())
     prefix = 'tmp/' + pidstring + '_' + argfilename + '_'
     for j in range(nproc):
-        varyval = begin+j*nperinterval*step
+        varyval = begin+(j*nperinterval-1)*step
         for k in range(nperinterval if j < in_nproc else endnperinterval):
-            varyval = varyval + k*step
+            varyval = varyval + step
             args[vary] = str(varyval)
             args["OutputName"] = outputname + "_" + vary + "_" + str(varyval)
             write_args(args, prefix + str(j) + "_" + str(k))
@@ -73,7 +73,7 @@ with the remainder (which will by definition have less work than the rest).
 
     batch_options = """#!/bin/bash
 #SBATCH -J dmt # A single job name for the array
-#SBATCH -n 1 # Number of cores
+#SBATCH -n 1 # Number of cores (Remember to also set export OMP_NUM_THREADS below)
 #SBATCH -N 1 # All cores on one machine
 #SBATCH -p serial_requeue # Partition
 #SBATCH --mem 1000 # Memory request (4Gb)
@@ -83,6 +83,7 @@ with the remainder (which will by definition have less work than the rest).
 module load gcc
 module load intel-mkl
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/n/sw/intel-cluster-studio-2019/compilers_and_libraries/linux/lib/intel64
+export OMP_NUM_THREADS=1 # Number of cores (should be = #SBATCH -n above)
 """
     batch_options += ("\nN=$(( ${SLURM_ARRAY_TASK_ID} == "+str(in_nproc+1)+" ? "+str(endnperinterval)+" : "+str(nperinterval)+" ))  " +
                       "\nfor ((i=0;i<N;i++)); do" +
