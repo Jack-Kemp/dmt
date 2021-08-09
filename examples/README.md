@@ -67,9 +67,9 @@ Writing Checkpoint = True and CheckpointTime = N will cause the code to write th
 
 When a simulation is restarted from a checkpoint like this, the output files will begin from at t=tstart, not t=0. To concatenate all of the output files, possibly from multiple restarts, use the script checkpoint\_glob.sh in examples/util like this:
 
-    ./util/checkpoint_glob.sh example_filename_t_*.dat
+    python checkpoint_cat.py example_filename_t_*.dat
 
-Which will output a file example\_filename\_t\_*.dat\_globbed with the entire continous time series. Use checkpoint\_glob\_all.sh to do the same for an entire directory of different checkpoint files example1, example2 and so on.
+Which will output a file example\_filename\_t\_*.dat\_globbed with the entire continous time series. Use checkpoint\_cat\_all.py to do the same for an entire directory of different checkpoint files.
 
 
 
