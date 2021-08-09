@@ -87,7 +87,10 @@ class ReadData:
                     _parse_args_line(line[2:], self.runinfo)
                 elif line[0:2] == "#~":
                     _parse_args_line(line[2:], self.args)
-        self.N = self.args[nSitesName]
+        try:
+            self.N = self.args[nSitesName]
+        except:
+            self.N = self.args['L']
 
     def __getitem__(self, key):
         if not isinstance(key, tuple):
