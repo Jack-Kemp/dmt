@@ -62,11 +62,11 @@ def append_args(args, output, prefix='', input_header=True):
     """Write input parameters from OrderedDict to output file output."""
     with open(output, 'a') as f:
         if input_header:
-            f.write(prefix+"input\n{\n")
+            f.write(prefix+"input\n"+prefix+"{\n")
         for k, v in args.items():
             f.write(prefix+k + " = " +  str(v) + "\n")
         if input_header:
-            f.write(prefix+"\n}")
+            f.write("\n"+prefix+"}")
 
 
 class ReadData:
@@ -87,7 +87,10 @@ class ReadData:
                     _parse_args_line(line[2:], self.runinfo)
                 elif line[0:2] == "#~":
                     _parse_args_line(line[2:], self.args)
-        self.N = self.args[nSitesName]
+        try:
+            self.N = self.args[nSitesName]
+        except:
+            self.N = self.args['L']
 
     def __getitem__(self, key):
         if not isinstance(key, tuple):
