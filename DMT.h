@@ -406,7 +406,7 @@ namespace itensor{
     int
     presRadius() const { return presRadius_; }
 
-    //Given a two-site siteOp hterm starting at site b, calculate the corresponding gate
+    //Given a two-site siteOp hterm over sites leftSite,leftSite+1, calculate the corresponding gate
     //for DMT update time tDelta given DMT basis.
 
     //If SwapOutputs = true, constructs a swap gate after hterm gate.
@@ -493,6 +493,66 @@ namespace itensor{
 			     mapPrime(gp.gate(),1,2) * mapPrime(gm.gate(),0,3));
 	}
     }
+
+
+
+    //Applies ITensor supOp, a normal iTensor operator with support on
+    //bare sites leftSite, leftsite+1
+    //construct a gate which perfroms the operation supOp*rho, where,
+    //here "*" stands for ordinary tensor multiplication. Notice
+    //this is different from using a siteOp, which when multiplied with
+    //rho give Tr(op*rho) -- this is why we call this version a superoperator.
+
+    void
+    applyTwoSiteSuperOp (ITensor supOp, int leftSite, const Args& args = Args::global())
+    {
+      int b = leftSite;
+      int r = leftSite+1;
+      auto & s = *dmtSites_;
+      ITensor AA;
+      
+      if (vectorized_)
+	{
+	  //If it is vectorized, we must kronecker the two superoperator indices
+	  //with the identity to construct the gate.
+
+	  //If (x) is kronecker product, we use vec(ABC) = C^T (x) A vec(B)
+
+	  auto idterm  = s.bareOp("Id",b)*s.bareOp("Id",r);
+	  auto siteInds = IndexSet(s.siteInd(b), s.siteInd(r));
+	  auto vecInds = IndexSet(s.vecInd(b), s.vecInd(r));
+	  auto supOpTerm = kron(idterm, supOp, siteInds, vecInds);
+
+	  //Change basis via similarity transform.
+	  auto Udag = s.basisChange(b)*s.basisChange(b+1);
+	  supOpTerm = mapPrime(swapPrime(Udag,0,1),0,3) *(supOpTerm* mapPrime(conj(Udag),1,2));
+	  supOpTerm.replaceTags("2","0").replaceTags("3","1");
+	 
+	  
+	  PrintData(supOpTerm);
+	  PrintData(supOp);
+	  AA = supOpTerm*rho_(b)*rho_(r);
+	  //Put the index tags back to normal
+	  AA.replaceTags("1","0");
+  
+	  if (hermitianBasis_)
+	    {
+	    Real imagNorm = norm(imagPart(AA));
+	    if (imagNorm > 1e-12)
+	      Error("Hermitian Basis but imaginary gate.");
+	    AA = realPart(AA);
+	    }
+	}
+      else
+	{
+	  AA =  supOp*rho_(b)*rho_(r);
+	  AA.replaceTags("Site,2","Site,0");
+	  AA.replaceTags("Site,3","Site,1");
+	}
+      //Truncate
+      truncate_at_site(leftSite, AA, args);
+    }
+
 
 
     //The DMT truncation algorithm. Truncates a bond from b in direction dir,
@@ -796,6 +856,17 @@ namespace itensor{
 	svdBond(rho_.rightLim()-2,WF,Fromright,{args,"RightTags=",original_link_tags});
       }
       return rho_;
+    }
+
+
+    //Truncate tensor AA into site, site + 1
+    void truncate_at_site(int site, ITensor const & AA, Args args = Args::global())
+    {
+      auto oldLeft = rho_.leftLim();
+      rho_.leftLim(site);
+      this->svdBond(site,AA,Fromleft, LocalOp(), args);
+      rho_.leftLim(oldLeft);
+      updateTraceCache();
     }
 
     //Vectorize the MPO rho via the vectorization given in dmtSites_.
