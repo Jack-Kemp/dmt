@@ -28,6 +28,7 @@ def main(argv):
 module load gcc
 module load intel-mkl
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/n/sw/intel-cluster-studio-2019/compilers_and_libraries/linux/lib/intel64
+export OMP_NUM_THREADS=4 # Number of cores (should be = #SBATCH -n above)
 """
     batch_options += (
                       "\n" + command + " " + tmpargs
