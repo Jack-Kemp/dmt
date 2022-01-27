@@ -15,7 +15,7 @@ First, you must install iTensor. Download it here:
 
 	git clone https://github.com/ITensor/ITensor
 
-Now follow the install instructions in the INSTALL file (alternatively you can read them online [here](http://www.itensor.org/docs.cgi?page=install&vers=cppv3)). Notice you need a C++ compiler which supports C++17, so if, for example, you have an ancient LTS version of Ubuntu, you may need to update gcc (using apt-get). You will also need to have development LAPACK and BLAS libraries. (Ulimately I recommend [Intel MKL] (https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-mkl-for-dpcpp/top.html).
+Now follow the install instructions in the INSTALL file (alternatively you can read them online [here](http://www.itensor.org/docs.cgi?page=install&vers=cppv3)). Notice you need a C++ compiler which supports C++17, so if, for example, you have an ancient LTS version of Ubuntu, you may need to update gcc (using apt-get). You will also need to have development LAPACK and BLAS libraries. (Ulimately I recommend [Intel MKL](https://software.intel.com/content/www/us/en/develop/documentation/get-started-with-mkl-for-dpcpp/top.html).
 
 Then clone this repository:
 
