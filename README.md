@@ -152,7 +152,10 @@ Require density matrix normalization and cache partial traces of the density mat
 	OnlyPreserveEnergyDensity = false
 
 
+# Acknowledgments #
 
+
+This code was written in [Professor Norman Yao's](https://quantumoptics.physics.berkeley.edu/) group with help from [Francisco Machado](http://www.fmachado.eu/) and Bingtian Ye. 
 
 
 	
